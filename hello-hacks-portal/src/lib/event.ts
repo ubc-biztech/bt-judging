@@ -1,5 +1,5 @@
-export const DEFAULT_EVENT_ID = "produhacks-2026";
-export const DEFAULT_EVENT_NAME = "ProduHacks 2026";
+export const DEFAULT_EVENT_ID = "hellohacks-2027";
+export const DEFAULT_EVENT_NAME = "HelloHacks 2027";
 
 export function getEventInitials(name: string) {
   const words = name

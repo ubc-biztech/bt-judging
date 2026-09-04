@@ -1,7 +1,7 @@
 import { Criterion, Rubric } from "@/lib/types";
 
 export const OFFICIAL_JUDGING_RUBRIC: Rubric = {
-  name: "Hello Hacks Judging Rubric",
+  name: "HelloHacks 2027 Judging Rubric",
   scaleMax: 30,
   scoreMode: "points",
   criteria: [

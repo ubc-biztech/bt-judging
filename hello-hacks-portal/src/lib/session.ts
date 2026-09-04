@@ -1,12 +1,14 @@
 // lib/session.ts
 import { useEffect, useState } from "react";
+import { EVENT_ID } from "./firebase";
 
 export type Session =
   | { role: "admin"; adminCode: string; name?: string }
   | { role: "judge"; judgeId: string; judgeCode: string; name?: string }
   | { role: "team"; teamId: string; teamCode: string; name?: string };
 
-const KEY = "hh_session_v1";
+// Require a new sign-in when switching events on the same site.
+const KEY = `hh_session_v1:${EVENT_ID}`;
 
 export function setSession(s: Session) {
   if (typeof window === "undefined") return;
