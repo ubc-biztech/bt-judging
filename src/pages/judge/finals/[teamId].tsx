@@ -1,52 +1,21 @@
 "use client";
 
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { computeReviewTotals, normalizeRubric } from "@/lib/judging";
-import { Rubric } from "@/lib/types";
 import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  setDoc,
-  where
-} from "firebase/firestore";
+  errorMessage,
+  getRubric,
+  getSettings,
+  getTeam,
+  listReviews,
+  submitReview
+} from "@/lib/data";
+import { normalizeRubric } from "@/lib/judging";
+import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 import RubricForm from "@/components/RubricForm";
-
-type Team = {
-  id: string;
-  name: string;
-  members?: string[];
-  github?: string;
-  devpost?: string;
-  description?: string;
-  imageUrls?: string[];
-};
-
-type EventSettings = {
-  phase?: string;
-  finalsJudgeIds?: string[];
-  finalsTeamIds?: string[];
-  anonymizeTeams?: boolean;
-};
-
-type ExistingReview = {
-  id: string;
-  teamId?: string;
-  judgeId?: string;
-  judgeName?: string;
-  round?: string;
-  scores?: Record<string, number>;
-  feedback?: string;
-  total?: number;
-  weightedTotal?: number;
-  createdAt?: Date;
-};
 
 export default function JudgeFinalTeam() {
   return (
@@ -62,84 +31,44 @@ function Page() {
   const router = useRouter();
   const { teamId } = router.query as { teamId: string };
   const { ready, session } = useClientSession();
-  const judgeId = ready && session?.role === "judge" ? session.judgeId : null;
-  const judgeName =
-    ready && session?.role === "judge" ? session.name || "Judge" : "";
+  const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const [settings, setSettings] = useState<EventSettings | null>(null);
-  const [team, setTeam] = useState<Team | null>(null);
-  const [rubric, setRubric] = useState<Rubric>(normalizeRubric());
-  const [existing, setExisting] = useState<ExistingReview | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const active = ready && !!judgeId && !!teamId;
 
+  const { data: settings } = usePoll(active ? getSettings : null, [active]);
+
+  const fetchTeam = useCallback(() => getTeam(teamId), [teamId]);
+  const { data: team } = usePoll(active ? fetchTeam : null, [active, teamId]);
+
+  const { data: serverRubric, loading: rubricLoading } = usePoll(active ? getRubric : null, [active]);
+  const rubric = useMemo(
+    () => (serverRubric ? normalizeRubric(serverRubric) : null),
+    [serverRubric]
+  );
+
+  const fetchExisting = useCallback(
+    async () =>
+      (await listReviews({ teamId, judgeId: judgeId as string, round: "finals" }))[0] ?? null,
+    [teamId, judgeId]
+  );
+  const { data: existing, refresh: refreshExisting } = usePoll(active ? fetchExisting : null, [active, teamId, judgeId]);
+
+  // Guard: finals phase, this judge is a finals judge, this team is a finalist.
   useEffect(() => {
-    if (!ready || !judgeId || !teamId) return;
-    const unsubs: Array<() => void> = [];
-
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID), (sSnap) => {
-        const sData = sSnap.exists() ? (sSnap.data() as EventSettings) : {};
-        setSettings(sData);
-        if (sData.phase !== "finals") {
-          router.replace("/judge");
-          return;
-        }
-
-        const finalsJudgeIds: string[] = sData.finalsJudgeIds || [];
-        const finalsTeamIds: string[] = sData.finalsTeamIds || [];
-        if (!finalsJudgeIds.includes(judgeId)) {
-          router.replace("/judge/finals");
-          return;
-        }
-        if (!finalsTeamIds.includes(teamId)) {
-          router.replace("/judge/finals");
-        }
-      })
-    );
-
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID, "teams", teamId), (tSnap) => {
-        if (tSnap.exists()) {
-          setTeam({ id: tSnap.id, ...(tSnap.data() as Omit<Team, "id">) });
-        } else {
-          setTeam(null);
-        }
-      })
-    );
-
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID, "rubric", "default"), (rSnap) => {
-        if (rSnap.exists()) {
-          setRubric(normalizeRubric(rSnap.data() as Partial<Rubric>));
-        } else {
-          setRubric(normalizeRubric());
-        }
-      })
-    );
-
-    const q1 = query(
-      collection(db, "events", EVENT_ID, "reviews"),
-      where("teamId", "==", teamId),
-      where("judgeId", "==", judgeId),
-      where("round", "==", "finals")
-    );
-    unsubs.push(
-      onSnapshot(q1, (rs) => {
-        if (!rs.empty) {
-          setExisting({
-            id: rs.docs[0].id,
-            ...(rs.docs[0].data() as Omit<ExistingReview, "id">)
-          });
-        } else {
-          setExisting(null);
-        }
-      })
-    );
-
-    return () => {
-      unsubs.forEach((u) => u());
-    };
-  }, [ready, judgeId, teamId, router]);
+    if (!settings || !judgeId || !teamId) return;
+    if (settings.phase !== "finals") {
+      router.replace("/judge");
+      return;
+    }
+    if (!settings.finalsJudgeIds.includes(judgeId)) {
+      router.replace("/judge/finals");
+      return;
+    }
+    if (!settings.finalsTeamIds.includes(teamId)) {
+      router.replace("/judge/finals");
+    }
+  }, [settings, judgeId, teamId, router]);
 
   const displayName =
     settings?.anonymizeTeams && team
@@ -159,42 +88,12 @@ function Page() {
     }
     setSubmitting(true);
     try {
-      const { total, weightedTotal } = computeReviewTotals(rubric, scores);
-
-      const reviewId = `${team.id}__${judgeId}__finals`;
-      await setDoc(
-        doc(db, "events", EVENT_ID, "reviews", reviewId),
-        {
-          teamId: team.id,
-          judgeId,
-          judgeName,
-          round: "finals",
-          scores,
-          feedback,
-          total,
-          weightedTotal,
-          createdAt: new Date()
-        },
-        { merge: true }
-      );
-
+      // Phase is "finals" here, so the server files this as a finals review and computes totals.
+      await submitReview(team.id, scores, feedback);
       alert("Finals review submitted!");
-      setExisting({
-        id: reviewId,
-        teamId: team.id,
-        judgeId,
-        judgeName,
-        round: "finals",
-        scores,
-        feedback,
-        total,
-        weightedTotal,
-        createdAt: new Date()
-      });
-    } catch (e: unknown) {
-      alert(
-        e instanceof Error ? e.message : "Error submitting finals review."
-      );
+      await refreshExisting();
+    } catch (e) {
+      alert(errorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -269,7 +168,7 @@ function Page() {
       )}
 
       {/* Rubric form */}
-      {rubric.criteria.length > 0 ? (
+      {rubric && rubric.criteria.length > 0 ? (
         <RubricForm
           criteria={rubric.criteria}
           scaleMax={rubric.scaleMax}
@@ -281,7 +180,7 @@ function Page() {
         />
       ) : (
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          Loading rubric…
+          {rubricLoading ? "Loading rubric…" : "The organizers have not set a rubric yet."}
         </div>
       )}
     </div>

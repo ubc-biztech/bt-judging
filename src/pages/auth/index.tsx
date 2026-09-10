@@ -1,13 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { setSession, getSession } from "@/lib/session";
+import { errorMessage, login } from "@/lib/data";
+import { getSession } from "@/lib/session";
+
+const HOME: Record<"admin" | "judge" | "team", string> = { admin: "/admin", judge: "/judge", team: "/submit" };
 
 export default function Auth() {
   const router = useRouter();
@@ -27,58 +27,14 @@ export default function Auth() {
     try {
       const codeTrim = code.trim();
       if (!codeTrim) throw new Error("Enter a code.");
-      if (role === "admin") {
-        const qj = query(
-          collection(db, "events", EVENT_ID, "judges"),
-          where("code", "==", codeTrim),
-          where("isAdmin", "==", true)
-        );
-        const snap = await getDocs(qj);
-        if (snap.empty) throw new Error("Admin code not found.");
-        const d = snap.docs[0];
-        setSession({
-          role: "admin",
-          adminCode: codeTrim,
-          name: (d.data() as any).name || "Admin"
-        });
-        router.push("/admin");
-        return;
+      // The server resolves the code to a role; the selector above is only a hint.
+      const session = await login(codeTrim);
+      if (session.role !== role) {
+        setRole(session.role);
       }
-      if (role === "judge") {
-        const qj = query(
-          collection(db, "events", EVENT_ID, "judges"),
-          where("code", "==", codeTrim)
-        );
-        const snap = await getDocs(qj);
-        if (snap.empty) throw new Error("Judge code not found.");
-        const d = snap.docs[0];
-        const data = d.data() as any;
-        setSession({
-          role: "judge",
-          judgeId: d.id,
-          judgeCode: codeTrim,
-          name: data.name || "Judge"
-        });
-        router.push("/judge");
-        return;
-      }
-      // team
-      const qt = query(
-        collection(db, "events", EVENT_ID, "teams"),
-        where("teamCode", "==", codeTrim)
-      );
-      const ts = await getDocs(qt);
-      if (ts.empty) throw new Error("Team code not found.");
-      const t = ts.docs[0];
-      setSession({
-        role: "team",
-        teamId: t.id,
-        teamCode: codeTrim,
-        name: (t.data() as any).name || "Team"
-      });
-      router.push("/submit");
-    } catch (e: any) {
-      setErr(e.message || "Sign-in failed");
+      router.push(HOME[session.role]);
+    } catch (e) {
+      setErr(errorMessage(e) || "Sign-in failed");
     }
   }
 

@@ -1,0 +1,24 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      # @ubc-biztech/sdk is a git dependency; if that repo is private, set SDK_READ_TOKEN.
+      - name: Allow npm to fetch @ubc-biztech/sdk
+        if: env.SDK_READ_TOKEN != ''
+        env: { SDK_READ_TOKEN: "${{ secrets.SDK_READ_TOKEN }}" }
+        run: |
+          git config --global url."https://x-access-token:${SDK_READ_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://x-access-token:${SDK_READ_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+      - run: npm ci
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm run lint --if-present
+      - run: npm run build
+        env: { NEXT_PUBLIC_EVENT_ID: hellohacks-2027 }

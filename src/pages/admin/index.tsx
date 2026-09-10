@@ -5,30 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
+import { getRubric, getSettings, listJudges, listReviews, listTeams } from "@/lib/data";
 import { OFFICIAL_JUDGING_RUBRIC } from "@/lib/judging";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
-
-type EventSettings = {
-  name?: string;
-  phase?: string;
-  requiredJudgeCount?: number;
-  finalsTeamIds?: string[];
-  finalsJudgeIds?: string[];
-};
-
-type JudgeDoc = {
-  assignedTeamIds?: string[];
-  isAdmin?: boolean;
-};
-
-type ReviewDoc = {
-  round?: string;
-};
-
-type RubricDoc = {
-  criteria?: Array<{ id: string }>;
-};
 
 type Snapshot = {
   eventName: string;
@@ -69,65 +47,57 @@ function AdminHome() {
 
   useEffect(() => {
     (async () => {
-      const [eventSnap, rubricSnap, teamsSnap, judgesSnap, reviewsSnap] =
-        await Promise.all([
-          getDoc(doc(db, "events", EVENT_ID)),
-          getDoc(doc(db, "events", EVENT_ID, "rubric", "default")),
-          getDocs(collection(db, "events", EVENT_ID, "teams")),
-          getDocs(collection(db, "events", EVENT_ID, "judges")),
-          getDocs(collection(db, "events", EVENT_ID, "reviews"))
-        ]);
+      const [settings, rubric, teams, judges, reviews] = await Promise.all([
+        getSettings(),
+        getRubric(),
+        listTeams(),
+        listJudges(),
+        listReviews({ round: "prelim" })
+      ]);
 
-      const settings = eventSnap.exists() ? (eventSnap.data() as EventSettings) : {};
-      const rubric = rubricSnap.exists() ? (rubricSnap.data() as RubricDoc) : {};
       const rubricCriteriaCount =
-        rubric.criteria?.length || OFFICIAL_JUDGING_RUBRIC.criteria.length;
-      const requiredJudgeCount = Number(settings.requiredJudgeCount ?? 3);
+        rubric?.criteria.length || OFFICIAL_JUDGING_RUBRIC.criteria.length;
+      const requiredJudgeCount = settings.perTeamJudges;
 
       const coverage: Record<string, number> = {};
-      judgesSnap.forEach((judge) => {
-        const data = judge.data() as JudgeDoc;
-        if (data.isAdmin) return;
-        for (const teamId of data.assignedTeamIds || []) {
+      for (const judge of judges) {
+        if (judge.isAdmin) continue;
+        for (const teamId of judge.assignedTeamIds) {
           coverage[teamId] = (coverage[teamId] || 0) + 1;
         }
-      });
-
-      let prelimReviews = 0;
-      reviewsSnap.forEach((review) => {
-        const data = review.data() as ReviewDoc;
-        if (!data.round || data.round === "prelim") prelimReviews += 1;
-      });
+      }
 
       let assignedTeams = 0;
       let underCoveredTeams = 0;
-      teamsSnap.forEach((team) => {
+      for (const team of teams) {
         const count = coverage[team.id] || 0;
         if (count > 0) assignedTeams += 1;
         if (count < requiredJudgeCount) underCoveredTeams += 1;
-      });
+      }
 
       setData({
-        eventName: settings.name?.trim() || "Event",
-        phase: settings.phase || "submission",
+        eventName: settings.eventName.trim() || "Event",
+        phase: settings.phase,
         requiredJudgeCount,
-        teams: teamsSnap.size,
-        judges: judgesSnap.docs.filter((d) => !(d.data() as JudgeDoc).isAdmin).length,
+        teams: teams.length,
+        judges: judges.filter((j) => !j.isAdmin).length,
         rubricCriteria: rubricCriteriaCount,
-        prelimReviews,
+        prelimReviews: reviews.length,
         assignedTeams,
         underCoveredTeams,
-        finalists: settings.finalsTeamIds?.length || 0,
-        finalsJudges: settings.finalsJudgeIds?.length || 0
+        finalists: settings.finalsTeamIds.length,
+        finalsJudges: settings.finalsJudgeIds.length
       });
-    })();
+    })().catch(() => {
+      // Leave the defaults in place; the readiness list then points at setup.
+    });
   }, []);
 
   const phaseLabel = useMemo(() => {
     if (data.phase === "finals") return "Finals";
-    if (data.phase === "judging") return "Prelim";
+    if (data.phase === "prelim") return "Prelim";
     if (data.phase === "closed") return "Closed";
-    return "Setup";
+    return "Submission";
   }, [data.phase]);
 
   const nextAction = useMemo<NextAction>(() => {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // pages/admin/teams/[teamId].tsx
 "use client";
 
@@ -7,65 +6,20 @@ import RoleGate from "@/components/RoleGate";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import { db, EVENT_ID, storage } from "@/lib/firebase";
 import {
-  arrayRemove,
-  arrayUnion,
-  collection,
-  deleteField,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
-  addDoc
-} from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
-
-type Team = {
-  id: string;
-  name: string;
-  members: string[];
-  teamCode?: string;
-  github?: string;
-  devpost?: string;
-  description?: string;
-  imageUrls?: string[];
-  createdAt?: any;
-  updatedAt?: any;
-};
-
-type Review = {
-  id: string;
-  teamId: string;
-  judgeId: string;
-  judgeName?: string;
-  total: number;
-  weightedTotal: number;
-  round?: "prelim" | "finals";
-  createdAt?: any;
-  scores?: Record<string, number>;
-  feedback?: string;
-};
-
-type Judge = {
-  id: string;
-  name?: string;
-  code?: string;
-  isAdmin?: boolean;
-  assignedTeamIds?: string[];
-};
-
-type ExtLink = {
-  id: string;
-  teamId: string;
-  title: string;
-  url: string;
-  createdAt?: any;
-  createdBy?: string;
-};
+  createLink,
+  deleteLink,
+  errorMessage,
+  getSettings,
+  getTeam,
+  listJudges,
+  listLinks,
+  listReviews,
+  patchSettings,
+  updateJudge,
+  updateTeam
+} from "@/lib/data";
+import type { Judge, Link as ExtLink, Review, Settings, Team } from "@/lib/types";
 
 export default function AdminTeamDetail() {
   return (
@@ -85,7 +39,7 @@ function Page() {
   const [edit, setEdit] = useState<Team | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [finalsSelected, setFinalsSelected] = useState(false);
 
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -97,59 +51,51 @@ function Page() {
     title: "",
     url: ""
   });
+  const [newImageUrl, setNewImageUrl] = useState("");
 
   useEffect(() => {
     if (!teamId) return;
     (async () => {
       setLoading(true);
-
-      // Event settings
-      const s = await getDoc(doc(db, "events", EVENT_ID));
-      const sData = s.exists() ? s.data() : {};
-      setSettings(sData);
-      setFinalsSelected((sData.finalsTeamIds || []).includes(teamId));
-
-      // Team
-      const t = await getDoc(doc(db, "events", EVENT_ID, "teams", teamId));
-      if (t.exists()) {
-        const data = { id: t.id, ...(t.data() as any) } as Team;
-        setTeam(data);
-        setEdit(data);
+      try {
+        const [sData, t, js, rs, ls] = await Promise.all([
+          getSettings(),
+          getTeam(teamId),
+          listJudges(),
+          listReviews({ teamId }),
+          listLinks()
+        ]);
+        setSettings(sData);
+        setFinalsSelected((sData.finalsTeamIds || []).includes(teamId));
+        if (t) {
+          setTeam(t);
+          setEdit(t);
+        }
+        setJudges(js);
+        setReviews(rs);
+        setLinks(ls);
+      } catch (e) {
+        alert(errorMessage(e));
+      } finally {
+        setLoading(false);
       }
-
-      // Judges
-      const js = await getDocs(collection(db, "events", EVENT_ID, "judges"));
-      const jList: Judge[] = [];
-      js.forEach((d) => jList.push({ id: d.id, ...(d.data() as any) }));
-      setJudges(jList);
-
-      // Reviews for this team (both rounds)
-      const rq = query(
-        collection(db, "events", EVENT_ID, "reviews"),
-        where("teamId", "==", teamId)
-      );
-      const rs = await getDocs(rq);
-      const list: Review[] = [];
-      rs.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
-      setReviews(list);
-
-      // External links for this team
-      const lq = query(
-        collection(db, "events", EVENT_ID, "links"),
-        where("teamId", "==", teamId)
-      );
-      const ls = await getDocs(lq);
-      const items: ExtLink[] = [];
-      ls.forEach((d) => items.push({ id: d.id, ...(d.data() as any) }));
-      items.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-      setLinks(items);
-
-      setLoading(false);
     })();
   }, [teamId]);
 
+  /** The editable fields, as `updateTeam` wants them (a full replace). */
+  function editable(t: Team) {
+    return {
+      name: t.name,
+      members: t.members || [],
+      github: t.github || undefined,
+      devpost: t.devpost || undefined,
+      description: t.description || undefined,
+      imageUrls: t.imageUrls || []
+    };
+  }
+
   const prelim = useMemo(
-    () => reviews.filter((r) => (r.round || "prelim") === "prelim"),
+    () => reviews.filter((r) => r.round === "prelim"),
     [reviews]
   );
   const finals = useMemo(
@@ -175,20 +121,12 @@ function Page() {
     if (!edit) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "events", EVENT_ID, "teams", edit.id), {
-        name: edit.name,
-        members: edit.members || [],
-        teamCode: edit.teamCode || "",
-        github: edit.github || "",
-        devpost: edit.devpost || "",
-        description: edit.description || "",
-        techStack: deleteField(),
-        updatedAt: new Date()
-      } as any);
-      setTeam(edit);
+      const saved = await updateTeam(edit.id, editable(edit));
+      setTeam(saved);
+      setEdit(saved);
       alert("Saved.");
-    } catch (e: any) {
-      alert(e.message || "Error saving.");
+    } catch (e) {
+      alert(errorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -201,131 +139,93 @@ function Page() {
     if (next.has(team.id)) next.delete(team.id);
     else next.add(team.id);
     try {
-      await updateDoc(doc(db, "events", EVENT_ID), {
-        finalsTeamIds: Array.from(next)
-      });
-      setFinalsSelected(!finalsSelected);
-      setSettings({ ...settings, finalsTeamIds: Array.from(next) });
-    } catch (e: any) {
-      alert(e.message || "Error updating finals selection.");
+      const saved = await patchSettings({ finalsTeamIds: Array.from(next) });
+      setFinalsSelected(next.has(team.id));
+      setSettings(saved);
+    } catch (e) {
+      alert(errorMessage(e));
     }
-  }
-
-  async function deleteImagesByUrls(urls: string[]) {
-    const deletions = urls.map(async (u) => {
-      try {
-        const r = ref(storage, u);
-        await deleteObject(r);
-      } catch (e) {
-        console.warn("Failed to delete image", u, e);
-      }
-    });
-    await Promise.allSettled(deletions);
   }
 
   async function clearSubmission() {
     if (!team) return;
     const confirmed = confirm(
-      `Clear submission for "${team.name}"?\n\nThis will:\n• Delete uploaded images\n• Reset GitHub, Devpost, Description\n\nTeam name, members, and team code remain.`
+      `Clear submission for "${team.name}"?\n\nThis will:\n• Remove image links\n• Reset GitHub, Devpost, Description\n\nTeam name, members, and team code remain.`
     );
     if (!confirmed) return;
 
     try {
-      const urls = team.imageUrls || [];
-      if (urls.length) await deleteImagesByUrls(urls);
-
-      await updateDoc(doc(db, "events", EVENT_ID, "teams", team.id), {
-        github: "",
-        devpost: "",
-        description: "",
-        imageUrls: [],
-        techStack: deleteField(),
-        updatedAt: new Date()
-      } as any);
-
-      const next: Team = {
-        ...team,
-        github: "",
-        devpost: "",
-        description: "",
-        imageUrls: [],
-        updatedAt: new Date() as any
-      };
-      setTeam(next);
-      setEdit(next);
-
+      const saved = await updateTeam(team.id, {
+        name: team.name,
+        members: team.members || [],
+        imageUrls: []
+      });
+      setTeam(saved);
+      setEdit(saved);
       alert("Submission cleared.");
-    } catch (e: any) {
-      alert(e.message || "Error clearing submission.");
+    } catch (e) {
+      alert(errorMessage(e));
     }
   }
 
-  async function assignJudge(judgeId: string) {
+  async function setImageUrls(urls: string[]) {
+    if (!team) return;
     try {
-      await updateDoc(doc(db, "events", EVENT_ID, "judges", judgeId), {
-        assignedTeamIds: arrayUnion(teamId)
-      });
-      // local update
-      setJudges((prev) =>
-        prev.map((j) =>
-          j.id === judgeId
-            ? { ...j, assignedTeamIds: [...(j.assignedTeamIds || []), teamId!] }
-            : j
-        )
-      );
-    } catch (e: any) {
-      alert(e.message || "Error assigning judge.");
+      const saved = await updateTeam(team.id, { ...editable(team), imageUrls: urls });
+      setTeam(saved);
+      setEdit((e) => (e ? { ...e, imageUrls: saved.imageUrls } : e));
+    } catch (e) {
+      alert(errorMessage(e));
     }
   }
 
-  async function unassignJudge(judgeId: string) {
+  async function addImageUrl() {
+    const u = newImageUrl.trim();
+    if (!u) return;
+    await setImageUrls([...(team?.imageUrls || []), u]);
+    setNewImageUrl("");
+  }
+
+  async function removeImageUrl(i: number) {
+    await setImageUrls((team?.imageUrls || []).filter((_, idx) => idx !== i));
+  }
+
+  async function setAssignment(judgeId: string, assigned: boolean) {
+    const j = judges.find((x) => x.id === judgeId);
+    if (!j || !teamId) return;
+    const next = new Set(j.assignedTeamIds || []);
+    if (assigned) next.add(teamId);
+    else next.delete(teamId);
     try {
-      await updateDoc(doc(db, "events", EVENT_ID, "judges", judgeId), {
-        assignedTeamIds: arrayRemove(teamId)
-      });
-      setJudges((prev) =>
-        prev.map((j) =>
-          j.id === judgeId
-            ? {
-                ...j,
-                assignedTeamIds: (j.assignedTeamIds || []).filter(
-                  (t) => t !== teamId
-                )
-              }
-            : j
-        )
-      );
-    } catch (e: any) {
-      alert(e.message || "Error unassigning judge.");
+      const saved = await updateJudge(judgeId, { assignedTeamIds: Array.from(next) });
+      setJudges((prev) => prev.map((x) => (x.id === judgeId ? saved : x)));
+    } catch (e) {
+      alert(errorMessage(e));
     }
   }
+
+  const assignJudge = (judgeId: string) => setAssignment(judgeId, true);
+  const unassignJudge = (judgeId: string) => setAssignment(judgeId, false);
 
   async function addExternalLink() {
-    if (!teamId) return;
     const title = newLink.title.trim();
     const url = newLink.url.trim();
     if (!title || !url) return alert("Title and URL required.");
     try {
-      const nd = await addDoc(collection(db, "events", EVENT_ID, "links"), {
-        teamId,
-        title,
-        url,
-        createdAt: new Date(),
-        createdBy: "admin"
-      });
-      setLinks((l) => [...l, { id: nd.id, teamId, title, url }]);
+      const created = await createLink(title, url);
+      setLinks((l) => [...l, created]);
       setNewLink({ title: "", url: "" });
-    } catch (e: any) {
-      alert(e.message || "Error adding link.");
+    } catch (e) {
+      alert(errorMessage(e));
     }
   }
 
   async function removeExternalLink(id: string) {
     try {
-      await deleteDoc(doc(db, "events", EVENT_ID, "links", id));
+      await deleteLink(id);
       setLinks((l) => l.filter((x) => x.id !== id));
-    } catch (e: any) {
-      alert(e.message || "Error removing link.");
+    } catch (e) {
+      alert(errorMessage(e));
     }
   }
 
@@ -365,11 +265,8 @@ function Page() {
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             ID: <span className="font-mono">{team.id}</span>
-            {team.createdAt?.toDate ? (
-              <> • Created: {team.createdAt.toDate().toLocaleString()}</>
-            ) : null}
-            {team.updatedAt?.toDate ? (
-              <> • Updated: {team.updatedAt.toDate().toLocaleString()}</>
+            {team.createdAt ? (
+              <> • Created: {new Date(team.createdAt).toLocaleString()}</>
             ) : null}
           </p>
         </div>
@@ -400,7 +297,7 @@ function Page() {
       {/* Quick actions */}
       <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
         <button
-          onClick={() => copy(team.teamCode || "")}
+          onClick={() => copy(team.code || "")}
           className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
         >
           Copy Team Code
@@ -488,11 +385,12 @@ function Page() {
             </Labeled>
 
             <Labeled label="Team Code">
-              <input
-                className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
-                value={edit.teamCode || ""}
-                onChange={(e) => setEdit({ ...edit, teamCode: e.target.value })}
-              />
+              <div
+                className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10"
+                title="Login code (server-generated)"
+              >
+                {team.code || "—"}
+              </div>
             </Labeled>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -535,32 +433,52 @@ function Page() {
         <div className="mb-3 text-lg font-semibold">Images</div>
         {team.imageUrls?.length ? (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-            {team.imageUrls!.map((u, i) => (
-              <a
+            {team.imageUrls.map((u, i) => (
+              <div
                 key={i}
-                href={u}
-                target="_blank"
-                className="block overflow-hidden rounded-lg border border-gray-200 dark:border-white/10"
-                title="Open image"
+                className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10"
               >
-                <img
-                  src={u}
-                  alt=""
-                  className="aspect-video w-full object-cover"
-                />
-              </a>
+                <a href={u} target="_blank" title="Open image">
+                  <img
+                    src={u}
+                    alt=""
+                    className="aspect-video w-full object-cover"
+                  />
+                </a>
+                <button
+                  onClick={() => removeImageUrl(i)}
+                  className="absolute right-1 top-1 rounded bg-black/60 px-2 py-0.5 text-[10px] text-white"
+                  title="Remove image link"
+                >
+                  Remove
+                </button>
+              </div>
             ))}
           </div>
         ) : (
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            No images uploaded.
+            No images yet.
           </div>
         )}
+        <div className="mt-3 flex gap-2">
+          <input
+            className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
+            placeholder="https://… (image URL)"
+            value={newImageUrl}
+            onChange={(e) => setNewImageUrl(e.target.value)}
+          />
+          <button
+            onClick={addImageUrl}
+            className="rounded-md border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
+          >
+            Add image URL
+          </button>
+        </div>
       </section>
 
-      {/* External Links (Devpost / extras) */}
+      {/* Event links (shared across the portal; there are no per-team links in the API) */}
       <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-        <div className="mb-3 text-lg font-semibold">Team Links</div>
+        <div className="mb-3 text-lg font-semibold">Event Links</div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
           {links.map((l) => (
             <div
@@ -568,7 +486,7 @@ function Page() {
               className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs dark:border-white/10"
             >
               <a href={l.url} target="_blank" className="truncate underline">
-                {l.title}
+                {l.label}
               </a>
               <button
                 onClick={() => removeExternalLink(l.id)}
@@ -784,11 +702,7 @@ function TagEditor({
 function ReviewsTable({ reviews }: { reviews: Review[] }) {
   const sorted = useMemo(
     () =>
-      [...reviews].sort((a, b) => {
-        const at = a.createdAt?.toMillis?.() ?? 0;
-        const bt = b.createdAt?.toMillis?.() ?? 0;
-        return bt - at;
-      }),
+      [...reviews].sort((a, b) => b.completedAt.localeCompare(a.completedAt)),
     [reviews]
   );
 
@@ -811,15 +725,13 @@ function ReviewsTable({ reviews }: { reviews: Review[] }) {
               className="border-t border-gray-100 dark:border-white/10"
             >
               <td className="px-2 py-1">{r.judgeName || r.judgeId}</td>
-              <td className="px-2 py-1">{r.round || "prelim"}</td>
+              <td className="px-2 py-1">{r.round}</td>
               <td className="px-2 py-1">
                 {Number(r.weightedTotal || 0).toFixed(2)}
               </td>
               <td className="px-2 py-1">{Number(r.total || 0).toFixed(2)}</td>
               <td className="px-2 py-1">
-                {r.createdAt?.toDate
-                  ? r.createdAt.toDate().toLocaleString()
-                  : "—"}
+                {r.completedAt ? new Date(r.completedAt).toLocaleString() : "—"}
               </td>
             </tr>
           ))}

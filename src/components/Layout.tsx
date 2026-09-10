@@ -2,7 +2,6 @@
 
 import {
   ReactNode,
-  useEffect,
   useMemo,
   useState,
   type ComponentProps,
@@ -30,8 +29,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useClientSession, clearSession, type Session } from "@/lib/session";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { getSettings } from "@/lib/data";
+import { usePoll } from "@/lib/usePoll";
 
 type Role = Session["role"] | "guest";
 
@@ -239,33 +238,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, session } = useClientSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [eventName, setEventName] = useState(DEFAULT_EVENT_NAME);
-  const [phase, setPhase] = useState("");
-  const [showTeamFeedback, setShowTeamFeedback] = useState(true);
-
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, "events", EVENT_ID),
-      (snap) => {
-        const data = snap.exists()
-          ? (snap.data() as {
-              name?: string;
-              phase?: string;
-              showTeamFeedback?: boolean;
-            })
-          : undefined;
-        setEventName(data?.name?.trim() || DEFAULT_EVENT_NAME);
-        setPhase(data?.phase || "");
-        setShowTeamFeedback(data?.showTeamFeedback !== false);
-      },
-      () => {
-        setEventName(DEFAULT_EVENT_NAME);
-        setPhase("");
-        setShowTeamFeedback(true);
-      }
-    );
-    return () => unsub();
-  }, []);
+  // Public read; polled so a phase change by an organizer shows up in every open tab.
+  const { data: settings } = usePoll(getSettings, [], 15000);
+  const eventName = settings?.eventName?.trim() || DEFAULT_EVENT_NAME;
+  const phase = settings?.phase ?? "";
+  const showTeamFeedback = settings?.showTeamFeedback !== false;
 
   const rawPath = router.asPath.split("?")[0];
   const path =

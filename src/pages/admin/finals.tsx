@@ -3,37 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc
-} from "firebase/firestore";
-
-type Team = { id: string; name: string; members?: string[] };
-type Judge = {
-  id: string;
-  name: string;
-  isAdmin?: boolean;
-  assignedTeamIds?: string[];
-};
-type Review = {
-  id: string;
-  teamId: string;
-  weightedTotal: number;
-  total: number;
-  round?: "prelim" | "finals";
-};
-
-type EventSettings = {
-  phase?: string;
-  finalsTopN?: number;
-  finalsTeamIds?: string[];
-  finalsJudgeIds?: string[];
-  [key: string]: unknown;
-};
+import { errorMessage, getSettings, listJudges, listReviews, listTeams, patchSettings } from "@/lib/data";
+import type { Judge, Settings as EventSettings, Team } from "@/lib/types";
 
 export default function FinalsAdminPage() {
   return (
@@ -65,46 +36,28 @@ function Page() {
 
   useEffect(() => {
     (async () => {
-      const s = await getDoc(doc(db, "events", EVENT_ID));
-      const sData = s.exists() ? (s.data() as EventSettings) : {};
+      let sData: EventSettings;
+      let ts: Team[];
+      let jlist: Judge[];
+      let rs: Awaited<ReturnType<typeof listReviews>>;
+      try {
+        [sData, ts, jlist, rs] = await Promise.all([getSettings(), listTeams(), listJudges(), listReviews({ round: "prelim" })]);
+      } catch (e) {
+        setError(errorMessage(e));
+        return;
+      }
       setSettings(sData);
       setFinalsTopN(Number(sData.finalsTopN ?? 5));
 
-      // teams
-      const ts = await getDocs(collection(db, "events", EVENT_ID, "teams"));
       const tmap: Record<string, Team> = {};
-      ts.forEach((d) => {
-        const data = d.data() as Partial<Team>;
-        tmap[d.id] = {
-          id: d.id,
-          name: data.name || d.id,
-          members: data.members
-        };
-      });
+      ts.forEach((t) => (tmap[t.id] = t));
       setTeams(tmap);
-
-      // judges
-      const js = await getDocs(collection(db, "events", EVENT_ID, "judges"));
-      const jlist: Judge[] = [];
-      js.forEach((d) => {
-        const data = d.data() as Partial<Judge>;
-        jlist.push({
-          id: d.id,
-          name: data.name || d.id,
-          isAdmin: data.isAdmin,
-          assignedTeamIds: data.assignedTeamIds
-        });
-      });
       setJudges(jlist);
 
-      // prelim reviews aggregate
-      const rs = await getDocs(collection(db, "events", EVENT_ID, "reviews"));
+      // prelim reviews aggregate (totals are computed server-side)
       const agg: Record<string, { sumW: number; sum: number; count: number }> =
         {};
-      rs.forEach((d) => {
-        const r = d.data() as Review;
-        const isPrelim = !r.round || r.round === "prelim";
-        if (!isPrelim) return;
+      rs.forEach((r) => {
         const cur = agg[r.teamId] || { sumW: 0, sum: 0, count: 0 };
         cur.sumW += Number(r.weightedTotal || 0);
         cur.sum += Number(r.total || 0);
@@ -124,10 +77,8 @@ function Page() {
       });
       setPrelimAgg(aggOut);
 
-      const preTeams = new Set<string>((sData.finalsTeamIds || []) as string[]);
-      const preJudges = new Set<string>(
-        (sData.finalsJudgeIds || []) as string[]
-      );
+      const preTeams = new Set<string>(sData.finalsTeamIds || []);
+      const preJudges = new Set<string>(sData.finalsJudgeIds || []);
       setSelectedFinalsTeams(preTeams);
       setSelectedFinalsJudges(preJudges);
     })();
@@ -185,24 +136,15 @@ function Page() {
     }
     setBusy(true);
     try {
-      await setDoc(
-        doc(db, "events", EVENT_ID),
-        {
-          finalsTopN,
-          finalsTeamIds: Array.from(selectedFinalsTeams),
-          finalsJudgeIds: Array.from(selectedFinalsJudges)
-        },
-        { merge: true }
-      );
-      setSettings((prev) => ({
-        ...(prev || {}),
+      const saved = await patchSettings({
         finalsTopN,
         finalsTeamIds: Array.from(selectedFinalsTeams),
         finalsJudgeIds: Array.from(selectedFinalsJudges)
-      }));
+      });
+      setSettings(saved);
       setNotice("Finals setup saved.");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error saving finals setup.");
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -221,26 +163,16 @@ function Page() {
     }
     setBusy(true);
     try {
-      await setDoc(
-        doc(db, "events", EVENT_ID),
-        {
-          phase: "finals",
-          finalsTopN,
-          finalsTeamIds: Array.from(selectedFinalsTeams),
-          finalsJudgeIds: Array.from(selectedFinalsJudges)
-        },
-        { merge: true }
-      );
-      setSettings((prev) => ({
-        ...(prev || {}),
+      const saved = await patchSettings({
         phase: "finals",
         finalsTopN,
         finalsTeamIds: Array.from(selectedFinalsTeams),
         finalsJudgeIds: Array.from(selectedFinalsJudges)
-      }));
+      });
+      setSettings(saved);
       setNotice("Finals started.");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error starting finals.");
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -251,11 +183,10 @@ function Page() {
     setNotice("");
     setBusy(true);
     try {
-      await setDoc(doc(db, "events", EVENT_ID), { phase: "prelim" }, { merge: true });
-      setSettings((prev) => ({ ...(prev || {}), phase: "prelim" }));
+      setSettings(await patchSettings({ phase: "prelim" }));
       setNotice("Switched to prelim.");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error switching to prelim.");
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

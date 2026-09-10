@@ -1,47 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  serverTimestamp,
-  writeBatch
-} from "firebase/firestore";
+import { createTeam, errorMessage, listTeams } from "@/lib/data";
+import type { Team } from "@/lib/types";
 
 const RAW_TEAMS: { name: string; members: string[] }[] = [];
 
-function slugify(input: string) {
-  return (
-    input
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)+/g, "")
-      .replace(/--+/g, "-")
-      .slice(0, 40) || "team"
-  );
-}
-
-function code4() {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let s = "";
-  for (let i = 0; i < 4; i++) {
-    s += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return s;
-}
-
 type PlanRow = {
-  teamId: string;
   name: string;
   members: string[];
-  teamCode: string;
-  existsId: boolean;
-  existsCode: boolean;
+  existsName: boolean;
+};
+
+type ResultRow = {
+  name: string;
+  status: "created" | "error";
+  detail: string;
 };
 
 export default function SeedTeamsPage() {
@@ -56,25 +32,19 @@ export default function SeedTeamsPage() {
 
 function Page() {
   const [loading, setLoading] = useState(false);
-  const [existingIds, setExistingIds] = useState<Set<string>>(new Set());
-  const [existingCodes, setExistingCodes] = useState<Set<string>>(new Set());
+  const [existing, setExisting] = useState<Team[]>([]);
   const [dryRun, setDryRun] = useState(true);
   const [result, setResult] = useState<string | null>(null);
+  const [rows, setRows] = useState<ResultRow[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, "events", EVENT_ID, "teams"));
-        const ids = new Set<string>();
-        const codes = new Set<string>();
-        snap.forEach((d) => {
-          ids.add(d.id);
-          const c = (d.data() as any)?.teamCode;
-          if (typeof c === "string" && c.length > 0) codes.add(c);
-        });
-        setExistingIds(ids);
-        setExistingCodes(codes);
+        setExisting(await listTeams());
+      } catch (e) {
+        setResult(`Error loading existing teams: ${errorMessage(e)}`);
       } finally {
         setLoading(false);
       }
@@ -82,75 +52,46 @@ function Page() {
   }, []);
 
   const plan: PlanRow[] = useMemo(() => {
-    const usedIds = new Set(existingIds);
-    const usedCodes = new Set(existingCodes);
-    const out: PlanRow[] = [];
-
-    for (const t of RAW_TEAMS) {
-      const members = (t.members || [])
-        .map((m) => (m || "").trim())
-        .filter(Boolean);
-
-      const base = slugify(t.name);
-      let candidate = base;
-      let n = 2;
-      while (usedIds.has(candidate)) {
-        candidate = `${base}-${n++}`;
-      }
-      usedIds.add(candidate);
-
-      let code = code4();
-      while (usedCodes.has(code)) {
-        code = code4();
-      }
-      usedCodes.add(code);
-
-      out.push({
-        teamId: candidate,
+    const existingNames = new Set(existing.map((t) => t.name.trim().toLowerCase()));
+    return RAW_TEAMS.map((t) => {
+      const members = (t.members || []).map((m) => (m || "").trim()).filter(Boolean);
+      return {
         name: t.name,
         members,
-        teamCode: code,
-        existsId: existingIds.has(candidate),
-        existsCode: existingCodes.has(code)
-      });
-    }
-
-    return out;
-  }, [existingIds, existingCodes]);
+        existsName: existingNames.has(t.name.trim().toLowerCase())
+      };
+    });
+  }, [existing]);
 
   async function createTeams() {
     setResult(null);
+    setRows([]);
     setLoading(true);
     try {
-      const batch = writeBatch(db);
-      for (const row of plan) {
-        const ref = doc(db, "events", EVENT_ID, "teams", row.teamId);
-        batch.set(
-          ref,
-          {
-            name: row.name,
-            members: row.members,
-            github: "",
-            devpost: "",
-            description: "",
-            imageUrls: [],
-            teamCode: row.teamCode,
-            createdAt: serverTimestamp()
-          },
-          { merge: true }
-        );
-      }
       if (dryRun) {
-        setResult(
-          `Dry run complete. ${plan.length} teams would be created/updated (no writes).`
-        );
-      } else {
-        await batch.commit();
-        setResult(`Created/updated ${plan.length} team docs successfully.`);
+        setResult(`Dry run complete. ${plan.length} teams would be created (no writes).`);
+        return;
       }
-    } catch (e: any) {
-      setResult(`Error: ${e.message || String(e)}`);
+      // No batch on the API: one create per row, reported per row. Server assigns id and code.
+      const out: ResultRow[] = [];
+      for (let i = 0; i < plan.length; i++) {
+        const row = plan[i];
+        setProgress(`Creating ${i + 1} of ${plan.length}: ${row.name}`);
+        try {
+          const t = await createTeam({ name: row.name, members: row.members, imageUrls: [] });
+          out.push({ name: row.name, status: "created", detail: t.code ?? "(code hidden)" });
+        } catch (e) {
+          out.push({ name: row.name, status: "error", detail: errorMessage(e) });
+        }
+        setRows([...out]);
+      }
+      const created = out.filter((r) => r.status === "created").length;
+      setResult(`Created ${created} of ${plan.length} teams.${created < plan.length ? " See errors below." : ""}`);
+      setExisting(await listTeams());
+    } catch (e) {
+      setResult(`Error: ${errorMessage(e)}`);
     } finally {
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -172,7 +113,7 @@ function Page() {
           </label>
           <button
             onClick={createTeams}
-            disabled={loading}
+            disabled={loading || plan.length === 0}
             className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {loading ? "Working…" : dryRun ? "Simulate Create" : "Create Teams"}
@@ -191,30 +132,30 @@ function Page() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-white/5">
             <tr>
-              <th className="px-3 py-2 text-left">Team ID</th>
               <th className="px-3 py-2 text-left">Name</th>
               <th className="px-3 py-2 text-left">Members</th>
-              <th className="px-3 py-2 text-left">Code (4)</th>
+              <th className="px-3 py-2 text-left">Already exists?</th>
             </tr>
           </thead>
           <tbody>
-            {plan.map((r) => (
+            {plan.map((r, i) => (
               <tr
-                key={r.teamId}
+                key={`${r.name}-${i}`}
                 className="border-t border-gray-100 dark:border-white/10"
               >
-                <td className="px-3 py-2 font-mono">{r.teamId}</td>
                 <td className="px-3 py-2">{r.name}</td>
                 <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
                   {r.members.join(", ")}
                 </td>
-                <td className="px-3 py-2 font-mono">{r.teamCode}</td>
+                <td className="px-3 py-2 text-xs">
+                  {r.existsName ? "A team with this name exists" : ""}
+                </td>
               </tr>
             ))}
             {plan.length === 0 && (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={3}
                   className="px-3 py-4 text-gray-500 dark:text-gray-400"
                 >
                   No teams to seed.
@@ -225,16 +166,44 @@ function Page() {
         </table>
       </div>
 
+      {progress && (
+        <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">{progress}</div>
+      )}
+
       {result && (
         <div className="mt-4 rounded-xl border border-gray-200 p-3 text-sm dark:border-white/10">
           {result}
         </div>
       )}
 
+      {rows.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-white/5">
+              <tr>
+                <th className="px-3 py-2 text-left">Name</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Login code / error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.name}-${i}`} className="border-t border-gray-100 dark:border-white/10">
+                  <td className="px-3 py-2">{r.name}</td>
+                  <td className="px-3 py-2">{r.status}</td>
+                  <td className={`px-3 py-2 font-mono ${r.status === "error" ? "text-rose-300" : ""}`}>
+                    {r.detail}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-        This tool ensures unique <span className="font-medium">teamId</span> and
-        4-char <span className="font-medium">teamCode</span> across existing and
-        newly added teams.
+        Team ids and login codes are assigned by the server. Codes are shown once
+        here and remain visible to admins on the Teams page.
       </p>
     </div>
   );

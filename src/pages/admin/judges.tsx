@@ -5,27 +5,14 @@ import dynamic from "next/dynamic";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import { db, EVENT_ID } from "@/lib/firebase";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  updateDoc
-} from "firebase/firestore";
-import { getSession } from "@/lib/session";
-
-type Judge = {
-  id: string;
-  name: string;
-  code: string;
-  isAdmin?: boolean;
-  assignedTeamIds?: string[];
-  capacity?: number;
-};
+  createJudge as apiCreateJudge,
+  deleteJudge,
+  errorMessage,
+  listJudges,
+  updateJudge
+} from "@/lib/data";
+import type { Judge } from "@/lib/types";
 
 function AdminJudgesInner() {
   return (
@@ -40,72 +27,55 @@ function AdminJudgesInner() {
 function Page() {
   const [list, setList] = useState<Judge[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newJ, setNewJ] = useState({ name: "", code: "", isAdmin: false });
-
-  // IMPORTANT: ensure getSession() is browser-safe (see note below)
-  const admin = getSession() as any; // { role:'admin', adminCode, name }
+  const [error, setError] = useState<string | null>(null);
+  const [newJ, setNewJ] = useState({ name: "", isAdmin: false });
+  // The most recently created judge: its code is shown once, prominently, so it can be handed over.
+  const [created, setCreated] = useState<Judge | null>(null);
 
   async function load() {
     setLoading(true);
-    const qj = query(
-      collection(db, "events", EVENT_ID, "judges"),
-      orderBy("name")
-    );
-    const snap = await getDocs(qj);
-    setList(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    try {
+      setList(await listJudges());
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
     setLoading(false);
   }
   useEffect(() => {
     load();
   }, []);
 
-  async function createJudge() {
-    if (!newJ.name || !newJ.code) return alert("Name & code required");
-    await addDoc(collection(db, "events", EVENT_ID, "judges"), {
-      name: newJ.name,
-      code: newJ.code,
-      isAdmin: !!newJ.isAdmin,
-      assignedTeamIds: [],
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    setNewJ({ name: "", code: "", isAdmin: false });
+  async function run(fn: () => Promise<unknown>) {
+    try {
+      await fn();
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
     await load();
+  }
+
+  async function createJudge() {
+    if (!newJ.name) return alert("Name required");
+    await run(async () => {
+      const j = await apiCreateJudge(newJ.name, newJ.isAdmin);
+      setCreated(j);
+      setNewJ({ name: "", isAdmin: false });
+    });
   }
 
   async function saveJudge(j: Judge) {
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      name: j.name,
-      code: j.code,
-      isAdmin: !!j.isAdmin,
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    await load();
-  }
-
-  async function setCapacity(j: Judge, val: number) {
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      capacity: val,
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    await load();
+    await run(() => updateJudge(j.id, { name: j.name, isAdmin: j.isAdmin }));
   }
 
   async function resetAssignments(j: Judge) {
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      assignedTeamIds: [],
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    await load();
+    await run(() => updateJudge(j.id, { assignedTeamIds: [] }));
   }
 
   async function removeJudge(j: Judge) {
     if (!confirm(`Delete judge "${j.name}"?`)) return;
-    await deleteDoc(doc(db, "events", EVENT_ID, "judges", j.id));
-    await load();
+    await run(() => deleteJudge(j.id));
   }
 
   return (
@@ -117,7 +87,7 @@ function Page() {
           <div>
             <div className="text-lg font-semibold text-slate-50">Create Judge</div>
             <p className="mt-1 text-sm text-slate-400">
-              Add a judge with a name and access code.
+              Add a judge by name. An access code is generated for them.
             </p>
           </div>
         </div>
@@ -127,12 +97,6 @@ function Page() {
             placeholder="Name"
             value={newJ.name}
             onChange={(e) => setNewJ({ ...newJ, name: e.target.value })}
-          />
-          <input
-            className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
-            placeholder="Code"
-            value={newJ.code}
-            onChange={(e) => setNewJ({ ...newJ, code: e.target.value })}
           />
           <label className="inline-flex h-11 shrink-0 items-center gap-3 rounded-lg border border-white/10 bg-[#0f1012] px-4 text-sm text-slate-200">
             <input
@@ -150,6 +114,23 @@ function Page() {
             Create
           </button>
         </div>
+        {created && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            <span>
+              Code for <span className="font-semibold">{created.name}</span>:
+            </span>
+            <code className="rounded bg-black/40 px-2 py-1 font-mono text-base tracking-wider">
+              {created.code}
+            </code>
+            <button
+              className="rounded-md border border-emerald-400/30 px-2 py-1 text-xs"
+              onClick={() => navigator.clipboard?.writeText(created.code ?? "")}
+            >
+              Copy
+            </button>
+          </div>
+        )}
+        {error && <div className="mt-4 text-sm text-rose-300">{error}</div>}
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
@@ -159,7 +140,6 @@ function Page() {
               <th className="px-4 py-2 text-left">Name</th>
               <th className="px-4 py-2 text-left">Code</th>
               <th className="px-4 py-2 text-left">Admin</th>
-              <th className="px-4 py-2 text-left">Capacity</th>
               <th className="px-4 py-2 text-left">Assigned</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -167,7 +147,7 @@ function Page() {
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4" colSpan={6}>
+                <td className="px-4 py-4" colSpan={5}>
                   Loading…
                 </td>
               </tr>
@@ -180,14 +160,13 @@ function Page() {
                   onSave={saveJudge}
                   onReset={resetAssignments}
                   onDelete={removeJudge}
-                  onCap={setCapacity}
                 />
               ))}
             {!loading && list.length === 0 && (
               <tr>
                 <td
                   className="px-4 py-4 text-gray-500 dark:text-gray-400"
-                  colSpan={6}
+                  colSpan={5}
                 >
                   No judges yet.
                 </td>
@@ -204,14 +183,12 @@ function Row({
   j,
   onSave,
   onReset,
-  onDelete,
-  onCap
+  onDelete
 }: {
   j: Judge;
   onSave: (j: Judge) => Promise<void>;
   onReset: (j: Judge) => Promise<void>;
   onDelete: (j: Judge) => Promise<void>;
-  onCap: (j: Judge, val: number) => Promise<void>;
 }) {
   const [edit, setEdit] = useState(j);
   return (
@@ -224,29 +201,16 @@ function Row({
         />
       </td>
       <td className="px-4 py-2">
-        <input
-          className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
-          value={edit.code}
-          onChange={(e) => setEdit({ ...edit, code: e.target.value })}
-        />
+        <span className="font-mono text-sm tracking-wider">{j.code ?? "••••"}</span>
       </td>
       <td className="px-4 py-2">
         <input
           type="checkbox"
-          checked={!!edit.isAdmin}
+          checked={edit.isAdmin}
           onChange={(e) => setEdit({ ...edit, isAdmin: e.target.checked })}
         />
       </td>
-      <td className="px-4 py-2">
-        <input
-          type="number"
-          min={0}
-          className="w-20 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-          value={edit.capacity ?? ""}
-          onChange={(e) => onCap(edit, Number(e.target.value || 0))}
-        />
-      </td>
-      <td className="px-4 py-2">{edit.assignedTeamIds?.length || 0}</td>
+      <td className="px-4 py-2">{edit.assignedTeamIds.length}</td>
       <td className="px-4 py-2">
         <div className="flex flex-wrap gap-2">
           <button

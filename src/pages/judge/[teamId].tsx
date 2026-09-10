@@ -1,34 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { computeReviewTotals, normalizeRubric } from "@/lib/judging";
-import { Rubric } from "@/lib/types";
 import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  setDoc,
-  where
-} from "firebase/firestore";
+  errorMessage,
+  getRubric,
+  getSettings,
+  getTeam,
+  listReviews,
+  submitReview
+} from "@/lib/data";
+import { normalizeRubric } from "@/lib/judging";
+import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 
 import RubricForm from "@/components/RubricForm";
-
-type Team = {
-  id: string;
-  name: string;
-  members?: string[];
-  github?: string;
-  devpost?: string;
-  description?: string;
-  imageUrls?: string[];
-};
 
 export default function JudgeTeamPage() {
   return (
@@ -45,66 +33,29 @@ function Page() {
   const { teamId } = router.query as { teamId: string };
   const { ready, session } = useClientSession();
 
-  const [settings, setSettings] = useState<any>(null);
-  const [team, setTeam] = useState<Team | null>(null);
-  const [rubric, setRubric] = useState<Rubric>(normalizeRubric());
-  const [existing, setExisting] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
-  const judgeId = ready && session?.role === "judge" ? session.judgeId : null;
-  const judgeName =
-    ready && session?.role === "judge" ? session.name || "Judge" : "";
+  const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  useEffect(() => {
-    if (!ready || !teamId) return;
-    const unsubs: Array<() => void> = [];
+  const { data: settings } = usePoll(getSettings, []);
 
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID), (sSnap) => {
-        setSettings(sSnap.exists() ? sSnap.data() : {});
-      })
-    );
+  const fetchTeam = useCallback(() => getTeam(teamId), [teamId]);
+  const { data: team } = usePoll(ready && teamId ? fetchTeam : null, [ready, teamId]);
 
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID, "teams", teamId), (tSnap) => {
-        if (tSnap.exists()) {
-          setTeam({ id: tSnap.id, ...(tSnap.data() as any) });
-        } else {
-          setTeam(null);
-        }
-      })
-    );
+  const { data: serverRubric, loading: rubricLoading } = usePoll(getRubric, []);
+  const rubric = useMemo(
+    () => (serverRubric ? normalizeRubric(serverRubric) : null),
+    [serverRubric]
+  );
 
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID, "rubric", "default"), (rSnap) => {
-        if (rSnap.exists()) {
-          setRubric(normalizeRubric(rSnap.data() as Partial<Rubric>));
-        } else {
-          setRubric(normalizeRubric());
-        }
-      })
-    );
-
-    if (judgeId) {
-      const q1 = query(
-        collection(db, "events", EVENT_ID, "reviews"),
-        where("teamId", "==", teamId),
-        where("judgeId", "==", judgeId)
-      );
-      unsubs.push(
-        onSnapshot(q1, (rs) => {
-          if (!rs.empty) {
-            setExisting({ id: rs.docs[0].id, ...(rs.docs[0].data() as any) });
-          } else {
-            setExisting(null);
-          }
-        })
-      );
-    }
-
-    return () => {
-      unsubs.forEach((u) => u());
-    };
-  }, [ready, teamId, judgeId]);
+  const fetchExisting = useCallback(
+    async () =>
+      (await listReviews({ teamId, judgeId: judgeId as string, round: "prelim" }))[0] ?? null,
+    [teamId, judgeId]
+  );
+  const { data: existing, refresh: refreshExisting } = usePoll(
+    ready && teamId && judgeId ? fetchExisting : null,
+    [ready, teamId, judgeId]
+  );
 
   const displayName =
     settings?.anonymizeTeams && team
@@ -124,38 +75,12 @@ function Page() {
     }
     setSubmitting(true);
     try {
-      const { total, weightedTotal } = computeReviewTotals(rubric, scores);
-
-      const reviewId = `${team.id}__${judgeId}`;
-      await setDoc(
-        doc(db, "events", EVENT_ID, "reviews", reviewId),
-        {
-          teamId: team.id,
-          judgeId,
-          judgeName,
-          scores,
-          feedback,
-          total,
-          weightedTotal,
-          createdAt: new Date()
-        },
-        { merge: true }
-      );
-
+      // The server picks the round from the current phase and computes totals from the rubric.
+      await submitReview(team.id, scores, feedback);
       alert("Submitted!");
-      setExisting({
-        id: reviewId,
-        teamId: team.id,
-        judgeId,
-        judgeName,
-        scores,
-        feedback,
-        total,
-        weightedTotal,
-        createdAt: new Date()
-      });
-    } catch (e: any) {
-      alert(e.message || "Error submitting review.");
+      await refreshExisting();
+    } catch (e) {
+      alert(errorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -244,7 +169,7 @@ function Page() {
       )}
 
       {/* Rubric form */}
-      {rubric.criteria.length > 0 ? (
+      {rubric && rubric.criteria.length > 0 ? (
         <RubricForm
           criteria={rubric.criteria}
           scaleMax={rubric.scaleMax}
@@ -256,7 +181,7 @@ function Page() {
         />
       ) : (
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          Loading rubric…
+          {rubricLoading ? "Loading rubric…" : "The organizers have not set a rubric yet."}
         </div>
       )}
     </div>

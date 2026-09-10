@@ -1,96 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import TeamCard from "@/components/TeamCard";
 import { Team } from "@/lib/types";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  where
-} from "firebase/firestore";
-import { db, EVENT_ID } from "@/lib/firebase";
+import { getJudge, getSettings, listReviews, listTeams } from "@/lib/data";
+import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
-
-type EventSettings = {
-  anonymizeTeams?: boolean;
-};
-
-type JudgeDoc = {
-  assignedTeamIds?: string[];
-};
 
 function Page() {
   const { ready, session } = useClientSession();
-  const judgeId = ready && session?.role === "judge" ? session.judgeId : null;
+  const judgeId = ready && session?.role === "judge" ? session.id : null;
   const judgeName =
     ready && session?.role === "judge" ? session.name || "Judge" : "Judge";
 
-  const [teamMap, setTeamMap] = useState<Record<string, Team>>({});
-  const [assignedTeamIds, setAssignedTeamIds] = useState<string[]>([]);
-  const [doneTeamIds, setDone] = useState<Set<string>>(new Set());
-  const [settings, setSettings] = useState<EventSettings | null>(null);
+  const { data: settings } = usePoll(getSettings, []);
+  const { data: teamList } = usePoll(listTeams, []);
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "events", EVENT_ID), (snap) => {
-      setSettings(snap.exists() ? snap.data() : {});
-    });
-    return () => unsub();
-  }, []);
+  const fetchJudge = useCallback(() => getJudge(judgeId as string), [judgeId]);
+  const { data: judge } = usePoll(judgeId ? fetchJudge : null, [judgeId]);
 
-  useEffect(() => {
-    if (!judgeId) return;
-    const judgeRef = doc(db, "events", EVENT_ID, "judges", judgeId);
-    const unsub = onSnapshot(judgeRef, (snap) => {
-      const assigned = (snap.data() as JudgeDoc)?.assignedTeamIds || [];
-      setAssignedTeamIds(Array.isArray(assigned) ? assigned : []);
-    });
-    return () => unsub();
-  }, [judgeId]);
+  const fetchMyReviews = useCallback(
+    () => listReviews({ judgeId: judgeId as string, round: "prelim" }),
+    [judgeId]
+  );
+  const { data: myReviews } = usePoll(judgeId ? fetchMyReviews : null, [judgeId]);
 
-  useEffect(() => {
-    const teamsRef = collection(db, "events", EVENT_ID, "teams");
-    const unsub = onSnapshot(teamsRef, (snap) => {
-      const next: Record<string, Team> = {};
-      snap.forEach((d) => {
-        const data = d.data() as Partial<Team>;
-        next[d.id] = {
-          id: d.id,
-          name: data.name || d.id,
-          members: data.members || [],
-          github: data.github,
-          devpost: data.devpost,
-          description: data.description,
-          imageUrls: data.imageUrls || [],
-          teamCode: data.teamCode,
-          createdAt: data.createdAt
-        };
-      });
-      setTeamMap(next);
-    });
-    return () => unsub();
-  }, []);
+  const teamMap = useMemo(() => {
+    const next: Record<string, Team> = {};
+    for (const t of teamList ?? []) next[t.id] = t;
+    return next;
+  }, [teamList]);
 
-  useEffect(() => {
-    if (!judgeId) return;
-    const qReviews = query(
-      collection(db, "events", EVENT_ID, "reviews"),
-      where("judgeId", "==", judgeId)
-    );
-    const unsub = onSnapshot(qReviews, (snap) => {
-      setDone(
-        new Set(
-          snap.docs
-            .map((d) => (d.data() as { teamId?: string }).teamId)
-            .filter((id): id is string => Boolean(id))
-        )
-      );
-    });
-    return () => unsub();
-  }, [judgeId]);
+  const assignedTeamIds = judge?.assignedTeamIds ?? [];
+  const doneTeamIds = useMemo(
+    () => new Set((myReviews ?? []).map((r) => r.teamId)),
+    [myReviews]
+  );
 
   const teams = useMemo(
     () => assignedTeamIds.map((id) => teamMap[id]).filter(Boolean),

@@ -3,27 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  orderBy,
-  query,
-  updateDoc
-} from "firebase/firestore";
-import { getSession } from "@/lib/session";
+import { errorMessage, getSettings, listJudges, listTeams, updateJudge } from "@/lib/data";
+import { EVENT_ID } from "@/lib/event";
+import type { Judge as ApiJudge, Team } from "@/lib/types";
 
-type Judge = {
-  id: string;
-  name: string;
-  code: string;
-  isAdmin?: boolean;
-  assignedTeamIds: string[];
-  capacity?: number;
-};
-type Team = { id: string; name: string; members: string[]; track?: string };
+/** Capacity is a UI-only planning aid; the API does not store it. */
+type Judge = ApiJudge & { capacity?: number };
 
 const PAGE_SIZE = 12;
 
@@ -48,38 +33,32 @@ function Page() {
     track: "all"
   });
   const [page, setPage] = useState(0);
-  const admin = getSession() as any;
+  const [error, setError] = useState("");
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const evSnap = await getDoc(doc(db, "events", EVENT_ID));
-      const req =
-        (evSnap.exists() && (evSnap.data() as any).requiredJudgeCount) || 3;
-      setRequiredPerTeam(Number(req));
-
-      const jSnap = await getDocs(
-        query(collection(db, "events", EVENT_ID, "judges"), orderBy("name"))
-      );
-      const tSnap = await getDocs(
-        query(collection(db, "events", EVENT_ID, "teams"), orderBy("name"))
-      );
-
-      const js = jSnap.docs.map((d) => ({
-        id: d.id,
-        assignedTeamIds: [],
-        ...(d.data() as any)
-      })) as Judge[];
-      const ts = tSnap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as any)
-      })) as Team[];
-
-      setJudges(js);
-      setTeams(ts);
-      setLoading(false);
+      try {
+        const [settings, js, ts] = await Promise.all([getSettings(), listJudges(), listTeams()]);
+        setRequiredPerTeam(Number(settings.perTeamJudges || 3));
+        setJudges(js);
+        setTeams(ts);
+      } catch (e) {
+        setError(errorMessage(e));
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
+
+  async function saveAssignments(judgeId: string, assignedTeamIds: string[]) {
+    try {
+      await updateJudge(judgeId, { assignedTeamIds });
+      setJudges((prev) => prev.map((x) => (x.id === judgeId ? { ...x, assignedTeamIds } : x)));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
 
   const filteredJudges = useMemo(() => {
     const s = filter.searchJudge.trim().toLowerCase();
@@ -90,12 +69,8 @@ function Page() {
 
   const filteredTeamsAll = useMemo(() => {
     const s = filter.searchTeam.trim().toLowerCase();
-    return teams
-      .filter((t) =>
-        filter.track === "all" ? true : (t.track || "—") === filter.track
-      )
-      .filter((t) => (t.name || "").toLowerCase().includes(s));
-  }, [teams, filter.searchTeam, filter.track]);
+    return teams.filter((t) => (t.name || "").toLowerCase().includes(s));
+  }, [teams, filter.searchTeam]);
 
   const totalPages = Math.max(
     1,
@@ -120,16 +95,7 @@ function Page() {
   async function toggleJudgeTeam(j: Judge, teamId: string) {
     const assigned = new Set(j.assignedTeamIds || []);
     assigned.has(teamId) ? assigned.delete(teamId) : assigned.add(teamId);
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      assignedTeamIds: Array.from(assigned),
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    setJudges((prev) =>
-      prev.map((x) =>
-        x.id === j.id ? { ...x, assignedTeamIds: Array.from(assigned) } : x
-      )
-    );
+    await saveAssignments(j.id, Array.from(assigned));
   }
 
   async function bulkAssignToJudge(judgeId: string) {
@@ -148,24 +114,11 @@ function Page() {
       current.add(t.id);
     }
 
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      assignedTeamIds: Array.from(current),
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    setJudges((prev) =>
-      prev.map((x) =>
-        x.id === j.id ? { ...x, assignedTeamIds: Array.from(current) } : x
-      )
-    );
+    await saveAssignments(j.id, Array.from(current));
   }
 
-  async function setCapacity(j: Judge, val: number) {
-    await updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-      capacity: val,
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
+  function setCapacity(j: Judge, val: number) {
+    // Not persisted: capacity is only used by Fill / Auto-assign in this session.
     setJudges((prev) =>
       prev.map((x) => (x.id === j.id ? { ...x, capacity: val } : x))
     );
@@ -173,16 +126,7 @@ function Page() {
 
   async function clearAll() {
     if (!confirm("Clear all judge assignments?")) return;
-    await Promise.all(
-      judges.map((j) =>
-        updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-          assignedTeamIds: [],
-          _adminJudgeId: "admin",
-          _adminJudgeCode: admin?.adminCode || "ADMIN"
-        } as any)
-      )
-    );
-    setJudges((prev) => prev.map((j) => ({ ...j, assignedTeamIds: [] })));
+    await Promise.all(judges.map((j) => saveAssignments(j.id, [])));
   }
 
   async function autoAssign() {
@@ -224,22 +168,7 @@ function Page() {
       }
     }
 
-    await Promise.all(
-      js.map((j) =>
-        updateDoc(doc(db, "events", EVENT_ID, "judges", j.id), {
-          assignedTeamIds: Array.from(j.assigned),
-          _adminJudgeId: "admin",
-          _adminJudgeCode: admin?.adminCode || "ADMIN"
-        } as any)
-      )
-    );
-
-    setJudges((prev) =>
-      prev.map((j) => {
-        const newJ = js.find((x) => x.id === j.id);
-        return newJ ? { ...j, assignedTeamIds: Array.from(newJ.assigned) } : j;
-      })
-    );
+    await Promise.all(js.map((j) => saveAssignments(j.id, Array.from(j.assigned))));
   }
 
   function covBadge(teamId: string) {
@@ -254,12 +183,6 @@ function Page() {
       </span>
     );
   }
-
-  const tracks = useMemo(() => {
-    const s = new Set<string>();
-    teams.forEach((t) => s.add(String(t.track || "—")));
-    return ["all", ...Array.from(s)];
-  }, [teams]);
 
   function csvCell(s: string | number | null | undefined) {
     const str = s == null ? "" : String(s);
@@ -337,7 +260,6 @@ function Page() {
     const ts = filteredTeamsAll.map((t) => ({
       id: t.id,
       name: t.name,
-      track: t.track || null,
       coverage: coverage[t.id] || 0
     }));
     const payload = {
@@ -410,6 +332,12 @@ function Page() {
         </div>
       </div>
 
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
         <input
           placeholder="Filter teams…"
@@ -428,20 +356,7 @@ function Page() {
           }
           className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
         />
-        <select
-          value={filter.track}
-          onChange={(e) => {
-            setPage(0);
-            setFilter((f) => ({ ...f, track: e.target.value }));
-          }}
-          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-        >
-          {tracks.map((t) => (
-            <option key={t} value={t}>
-              {t === "all" ? "All tracks" : t}
-            </option>
-          ))}
-        </select>
+        <div />
 
         <div className="flex items-center justify-end gap-2">
           <button

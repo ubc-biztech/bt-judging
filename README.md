@@ -1,40 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# bt-judging
 
-## Getting Started
+BizTech's hackathon judging portal (HelloHacks). Judges score teams against a rubric, organizers run
+prelims and finals, teams see their feedback. Deep-forked from `hello-hacks-judging-portal`.
 
-First, run the development server:
+**All data lives in the BizTech API.** This app has no database of its own. It talks to the
+`judging` service through [`@ubc-biztech/sdk`](https://github.com/ubc-biztech/sdk) and nothing else:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+bt-judging  ──@ubc-biztech/sdk──▶  api.ubcbiztech.com/judging/<event>/<year>/…  ──▶  DynamoDB
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The service, its routes and its auth rules are generated from the same declaration the SDK is
+generated from (`sdk/src/ontology/entities/judging.ts`). If you need the API to do something new,
+that file is where it changes; see the SDK's `CONTRIBUTING.md`.
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+## Run it
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+```sh
+npm ci
+cp .env.example .env.local     # then edit
+npm run dev
+```
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+| Variable | Meaning |
+|---|---|
+| `NEXT_PUBLIC_EVENT_ID` | `<slug>-<year>`, e.g. `hellohacks-2027`. Everything is scoped to this event. |
+| `NEXT_PUBLIC_BT_API_URL` | Optional. Defaults to `https://api-dev.ubcbiztech.com`, or prod when `NEXT_PUBLIC_STAGE=production`. |
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How people get in
 
-## Learn More
+Nobody has an account. Organizers mint **codes**:
 
-To learn more about Next.js, take a look at the following resources:
+1. An organizer signs in once with the stage's bootstrap code (set on the backend as `JUDGING_BOOTSTRAP_CODE`)
+   and creates the event's settings and rubric under **Admin**.
+2. They create judges (**Admin → Judges**); each judge gets a code. A judge with *admin* also gets the organizer role.
+3. They create teams (**Admin → Teams** or the CSV seeder); each team gets a code for its submission and feedback pages.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+The code is the bearer token for every API call. The API decides what each code may do; the UI only hides
+what it cannot use.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Where things are
 
-## Deploy on Vercel
+```
+src/lib/bt.ts        the SDK client for this event               (never call fetch elsewhere)
+src/lib/data.ts      every read and write the pages use          (import from here, not from the SDK)
+src/lib/session.ts   who is signed in, by code
+src/lib/usePoll.ts   live-ish views: refetch every 5s while visible (replaces Firestore listeners)
+src/lib/judging.ts   the official rubric and score helpers
+src/pages/…          the UI
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## What changed from the Firebase version
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+- Firestore, Firebase Storage and their config are gone; so is the `firebase` dependency.
+- Live listeners became polling (5 seconds, paused when the tab is hidden).
+- Team screenshots are URLs pasted by the team, not uploads. Bring back uploads by adding an
+  upload action to the judging service, not by adding a storage SDK here.
+- Review totals are computed by the server from the rubric; the client never computes a score that matters.
+- Codes are validated by the server. The old portal read every code into the browser to compare them.

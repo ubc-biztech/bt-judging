@@ -1,36 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // pages/results.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query
-} from "firebase/firestore";
-import { db, EVENT_ID } from "@/lib/firebase";
+import { getRubric, getSettings, listReviews, listTeams } from "@/lib/data";
+import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
-import { Criterion, Rubric } from "@/lib/types";
+import { Criterion, Review, Rubric, Team } from "@/lib/types";
 import { useClientSession } from "@/lib/session";
-
-type Review = {
-  id: string;
-  teamId: string;
-  judgeId: string;
-  judgeName?: string;
-  total: number;
-  weightedTotal: number;
-  scores?: Record<string, number>;
-  feedback?: string;
-  round?: "prelim" | "finals";
-  createdAt?: any;
-};
-
-type Team = { id: string; name: string; members?: string[] };
+import { usePoll } from "@/lib/usePoll";
 
 type Row = {
   teamId: string;
@@ -42,19 +21,12 @@ type Row = {
 export default function Results() {
   const { ready, session } = useClientSession();
   const [rows, setRows] = useState<Row[]>([]);
-  const [teams, setTeams] = useState<Record<string, Team>>({});
-  const [settings, setSettings] = useState<any>(null);
-  const [reviewsByTeam, setReviewsByTeam] = useState<Record<string, Review[]>>(
-    {}
-  );
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [rubric, setRubric] = useState<Rubric | null>(null);
   const [tab, setTab] = useState<"prelim" | "finals">("prelim");
   const [hideUnderCovered, setHideUnderCovered] = useState(true);
 
   const isAdmin = ready && session?.role === "admin";
   const isJudge = ready && session?.role === "judge";
-  const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
   const canViewFullResults = isAdmin || isJudge;
   const router = useRouter();
 
@@ -68,56 +40,26 @@ export default function Results() {
       router.replace("/team/feedback");
       return;
     }
-
-    const eventRef = doc(db, "events", EVENT_ID);
-    const rubricRef = doc(db, "events", EVENT_ID, "rubric", "default");
-    const teamsRef = collection(db, "events", EVENT_ID, "teams");
-    const reviewsRef = query(
-      collection(db, "events", EVENT_ID, "reviews"),
-      orderBy("teamId")
-    );
-
-    const unsubSettings = onSnapshot(
-      eventRef,
-      (snap) => {
-        const sData = snap.exists() ? snap.data() : {};
-        setSettings(sData);
-      },
-      () => undefined
-    );
-
-    const unsubRubric = onSnapshot(rubricRef, (r) => {
-      if (r.exists()) {
-        setRubric(normalizeRubric(r.data() as Partial<Rubric>));
-      } else {
-        setRubric(normalizeRubric());
-      }
-    });
-
-    const unsubTeams = onSnapshot(teamsRef, (ts) => {
-      const teamMap: Record<string, Team> = {};
-      ts.forEach((d) => (teamMap[d.id] = { id: d.id, ...(d.data() as any) }));
-      setTeams(teamMap);
-    });
-
-    const unsubReviews = onSnapshot(reviewsRef, (rs) => {
-      const byTeam: Record<string, Review[]> = {};
-      rs.forEach((d) => {
-        const v = { id: d.id, ...(d.data() as any) } as Review;
-        const round = (v.round || "prelim") as "prelim" | "finals";
-        if (!byTeam[v.teamId]) byTeam[v.teamId] = [];
-        byTeam[v.teamId].push({ ...v, round });
-      });
-      setReviewsByTeam(byTeam);
-    });
-
-    return () => {
-      unsubSettings();
-      unsubRubric();
-      unsubTeams();
-      unsubReviews();
-    };
   }, [ready, session, router]);
+
+  const active = ready && !!session && session.role !== "team";
+  const { data: settings } = usePoll(active ? getSettings : null, [active], 10000);
+  const { data: rubricRaw } = usePoll(active ? getRubric : null, [active], 15000);
+  const { data: teamList } = usePoll(active ? listTeams : null, [active], 10000);
+  const { data: reviewList } = usePoll(active ? () => listReviews() : null, [active]);
+
+  const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
+  const rubric: Rubric | null = useMemo(() => (rubricRaw === null ? null : normalizeRubric(rubricRaw)), [rubricRaw]);
+  const teams = useMemo(() => {
+    const map: Record<string, Team> = {};
+    for (const t of teamList ?? []) map[t.id] = t;
+    return map;
+  }, [teamList]);
+  const reviewsByTeam = useMemo(() => {
+    const byTeam: Record<string, Review[]> = {};
+    for (const r of reviewList ?? []) (byTeam[r.teamId] ||= []).push(r);
+    return byTeam;
+  }, [reviewList]);
 
   // Aggregate for current tab only
   useEffect(() => {
@@ -140,7 +82,7 @@ export default function Results() {
     });
 
     // coverage-aware sort: avg (weighted) desc, then review count desc
-    const req = Number(settings?.requiredJudgeCount ?? 3);
+    const req = Number(settings?.perTeamJudges ?? 3);
     const pointTotals = rubricUsesPointTotals(rubric);
     const sorted = Object.values(agg)
       .map((r) => ({ ...r, meetsCoverage: r.count >= req }))
@@ -153,9 +95,9 @@ export default function Results() {
         return (b.count || 0) - (a.count || 0);
       });
     setRows(sorted);
-  }, [reviewsByTeam, rubric, tab, settings?.requiredJudgeCount]);
+  }, [reviewsByTeam, rubric, tab, settings?.perTeamJudges]);
 
-  const reqCount = Number(settings?.requiredJudgeCount ?? 3);
+  const reqCount = Number(settings?.perTeamJudges ?? 3);
 
   const canShowDetails = isAdmin || allowJudgeSeeOthers;
   const pointTotals = rubricUsesPointTotals(rubric);
@@ -167,7 +109,7 @@ export default function Results() {
 
   /* ----------------- EXPORTS ----------------- */
 
-  function csvCell(s: any) {
+  function csvCell(s: unknown) {
     const str = s == null ? "" : String(s);
     return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
   }
@@ -240,9 +182,7 @@ export default function Results() {
               csvCell(nf(r.total)),
               csvCell(nf(r.weightedTotal)),
               csvCell(r.feedback || ""),
-              csvCell(
-                r.createdAt?.toDate ? r.createdAt.toDate().toISOString() : ""
-              )
+              csvCell(r.completedAt || "")
             ].join(",")
           );
         });
@@ -271,7 +211,7 @@ export default function Results() {
   function dateSlug() {
     return new Date().toISOString().replace(/[:.]/g, "-");
   }
-  function nf(n: any) {
+  function nf(n: unknown) {
     const x = Number(n);
     return Number.isFinite(x) ? x.toFixed(4) : "";
   }
@@ -472,7 +412,7 @@ function Details({
   rubric,
   pointTotals
 }: {
-  team: Team;
+  team: Team | undefined;
   reviews: Review[];
   rubric: Rubric | null;
   pointTotals: boolean;
@@ -483,12 +423,7 @@ function Details({
 
   // newest first
   const sorted = useMemo(
-    () =>
-      [...reviews].sort((a, b) => {
-        const at = a.createdAt?.toMillis?.() ?? 0;
-        const bt = b.createdAt?.toMillis?.() ?? 0;
-        return bt - at;
-      }),
+    () => [...reviews].sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || "")),
     [reviews]
   );
 
@@ -548,9 +483,7 @@ function Details({
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  {r.createdAt?.toDate
-                    ? r.createdAt.toDate().toLocaleString()
-                    : "—"}
+                  {r.completedAt ? new Date(r.completedAt).toLocaleString() : "—"}
                 </td>
               </tr>
             ))}

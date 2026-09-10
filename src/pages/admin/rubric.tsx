@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
+import { errorMessage, getRubric, setRubric as saveRubric } from "@/lib/data";
 import {
   normalizeRubric
 } from "@/lib/judging";
 import { Criterion, Rubric } from "@/lib/types";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export default function RubricPage() {
   return (
@@ -23,22 +22,19 @@ export default function RubricPage() {
 function Page() {
   const [rubric, setRubric] = useState<Rubric>(normalizeRubric());
   const [loading, setLoading] = useState(true);
-  const ref = useMemo(
-    () => doc(db, "events", EVENT_ID, "rubric", "default"),
-    []
-  );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setRubric(normalizeRubric(snap.data() as Partial<Rubric>));
-      } else {
-        setRubric(normalizeRubric());
+      try {
+        const existing = await getRubric();
+        setRubric(existing ? normalizeRubric(existing) : normalizeRubric());
+      } catch (e) {
+        setError(errorMessage(e));
       }
       setLoading(false);
     })();
-  }, [ref]);
+  }, []);
 
   function addCrit() {
     setRubric((r) => ({
@@ -69,10 +65,15 @@ function Page() {
     }));
   }
   async function save() {
+    setError(null);
     const normalized = normalizeRubric(rubric);
-    await setDoc(ref, normalized, { merge: true });
-    setRubric(normalized);
-    alert("Rubric saved");
+    try {
+      const saved = await saveRubric(normalized);
+      setRubric(normalizeRubric(saved));
+      alert("Rubric saved");
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   if (loading) return null;
@@ -213,6 +214,8 @@ function Page() {
           )}
         </div>
       </div>
+
+      {error && <div className="mt-6 text-sm text-rose-300">{error}</div>}
 
       <div className="mt-8">
         <button

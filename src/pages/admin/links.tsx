@@ -1,28 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query
-} from "firebase/firestore";
-import { getSession } from "@/lib/session";
-
-type Team = { id: string; name: string };
-type LinkDoc = {
-  id: string;
-  teamId: string;
-  title: string;
-  url: string;
-  createdBy?: string;
-};
+import { createLink, deleteLink, errorMessage, listLinks } from "@/lib/data";
+import type { Link } from "@/lib/types";
 
 export default function LinksPage() {
   return (
@@ -35,76 +17,63 @@ export default function LinksPage() {
 }
 
 function Page() {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [links, setLinks] = useState<LinkDoc[]>([]);
-  const [form, setForm] = useState({ teamId: "", title: "Devpost", url: "" });
-  const admin = getSession() as any;
+  const [links, setLinks] = useState<Link[]>([]);
+  const [form, setForm] = useState({ label: "Schedule", url: "", order: "" });
+  const [error, setError] = useState<string | null>(null);
 
+  async function load() {
+    try {
+      setLinks(await listLinks());
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
   useEffect(() => {
-    (async () => {
-      const ts = await getDocs(
-        query(collection(db, "events", EVENT_ID, "teams"), orderBy("name"))
-      );
-      setTeams(
-        ts.docs.map((d) => ({ id: d.id, name: (d.data() as any).name }))
-      );
-      const ls = await getDocs(
-        query(collection(db, "events", EVENT_ID, "links"))
-      );
-      setLinks(ls.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-    })();
+    load();
   }, []);
 
-  const teamMap = useMemo(
-    () => Object.fromEntries(teams.map((t) => [t.id, t.name])),
-    [teams]
-  );
-
   async function addLink() {
-    if (!form.teamId || !form.url) return alert("Team and URL required.");
-    await addDoc(collection(db, "events", EVENT_ID, "links"), {
-      teamId: form.teamId,
-      title: form.title || "Link",
-      url: form.url,
-      createdBy: "admin",
-      createdAt: new Date(),
-      _adminJudgeId: "admin",
-      _adminJudgeCode: admin?.adminCode || "ADMIN"
-    } as any);
-    setForm({ ...form, url: "" });
-    const ls = await getDocs(
-      query(collection(db, "events", EVENT_ID, "links"))
-    );
-    setLinks(ls.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    if (!form.label || !form.url) return alert("Label and URL required.");
+    try {
+      await createLink(form.label, form.url, form.order === "" ? undefined : Number(form.order));
+      setForm({ ...form, url: "", order: "" });
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+    await load();
   }
 
   async function removeLink(id: string) {
-    await deleteDoc(doc(db, "events", EVENT_ID, "links", id));
-    setLinks((prev) => prev.filter((x) => x.id !== id));
+    try {
+      await deleteLink(id);
+      setLinks((prev) => prev.filter((x) => x.id !== id));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   return (
     <div className="max-w-5xl">
       <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Links Manager</h1>
+      <p className="mt-2 text-sm text-slate-400">
+        Event-wide links shown on the home page (schedule, Discord, rules). Team links live on each team.
+      </p>
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <select
-          value={form.teamId}
-          onChange={(e) => setForm((f) => ({ ...f, teamId: e.target.value }))}
-          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-        >
-          <option value="">Select team…</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
         <input
-          value={form.title}
-          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+          value={form.label}
+          onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
           className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-          placeholder="Title (Devpost, Demo, …)"
+          placeholder="Label (Schedule, Discord, …)"
+        />
+        <input
+          type="number"
+          value={form.order}
+          onChange={(e) => setForm((f) => ({ ...f, order: e.target.value }))}
+          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
+          placeholder="Order (optional)"
         />
         <input
           value={form.url}
@@ -119,13 +88,14 @@ function Page() {
           Add
         </button>
       </div>
+      {error && <div className="mt-3 text-sm text-rose-300">{error}</div>}
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-white/5">
             <tr>
-              <th className="px-4 py-2 text-left">Team</th>
-              <th className="px-4 py-2 text-left">Title</th>
+              <th className="px-4 py-2 text-left">Order</th>
+              <th className="px-4 py-2 text-left">Label</th>
               <th className="px-4 py-2 text-left">URL</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -136,8 +106,8 @@ function Page() {
                 key={l.id}
                 className="border-t border-gray-100 dark:border-white/10"
               >
-                <td className="px-4 py-2">{teamMap[l.teamId] || l.teamId}</td>
-                <td className="px-4 py-2">{l.title}</td>
+                <td className="px-4 py-2">{l.order}</td>
+                <td className="px-4 py-2">{l.label}</td>
                 <td className="px-4 py-2">
                   <a
                     className="text-indigo-600 underline"

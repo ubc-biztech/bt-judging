@@ -4,8 +4,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useClientSession } from "@/lib/session";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { getSettings } from "@/lib/data";
 
 export default function Home() {
   const router = useRouter();
@@ -30,11 +29,9 @@ export default function Home() {
       }
       if (session.role === "judge") {
         try {
-          const s = await getDoc(doc(db, "events", EVENT_ID));
-          const data = s.exists() ? s.data() : {};
-          const finals = data?.phase === "finals";
-          const finalsJudgeIds: string[] = data?.finalsJudgeIds || [];
-          if (finals && finalsJudgeIds.includes(session.judgeId)) {
+          const settings = await getSettings();
+          const finals = settings.phase === "finals";
+          if (finals && settings.finalsJudgeIds.includes(session.id)) {
             router.replace("/judge/finals");
           } else {
             router.replace("/judge");

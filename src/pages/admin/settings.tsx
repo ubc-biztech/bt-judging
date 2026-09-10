@@ -2,20 +2,16 @@
 
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { DEFAULT_EVENT_NAME } from "@/lib/event";
-import { useEffect, useMemo, useState } from "react";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { DEFAULT_SETTINGS, PHASES, errorMessage, getSettings, setSettings } from "@/lib/data";
+import type { Phase } from "@/lib/types";
+import type { JudgingSettingsSetInput as Settings } from "@ubc-biztech/sdk";
 
-type Settings = {
-  name?: string;
-  requiredJudgeCount?: number;
-  maxImages?: number;
-  lockSubmissions?: boolean;
-  showTeamFeedback?: boolean;
-  allowJudgeSeeOthers?: boolean;
-  anonymizeTeams?: boolean;
-  phase?: "submission" | "judging" | "closed";
+const PHASE_LABELS: Record<Phase, string> = {
+  submission: "Submission",
+  prelim: "Preliminary judging",
+  finals: "Finals",
+  closed: "Closed",
 };
 
 export default function AdminSettings() {
@@ -29,32 +25,31 @@ export default function AdminSettings() {
 }
 
 function Page() {
-  const ref = useMemo(() => doc(db, "events", EVENT_ID), []);
-  const [s, setS] = useState<Settings>({
-    name: DEFAULT_EVENT_NAME,
-    requiredJudgeCount: 3,
-    maxImages: 10,
-    lockSubmissions: false,
-    showTeamFeedback: true,
-    allowJudgeSeeOthers: true,
-    anonymizeTeams: false,
-    phase: "submission"
-  });
+  const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setS((prev) => ({ ...prev, ...(snap.data() as Settings) }));
+      try {
+        const { updatedAt: _u, ...current } = await getSettings();
+        setS(current);
+      } catch (e) {
+        setError(errorMessage(e));
       }
       setLoading(false);
     })();
-  }, [ref]);
+  }, []);
 
   async function save() {
-    await setDoc(ref, s, { merge: true });
-    alert("Settings saved");
+    setError(null);
+    try {
+      const { updatedAt: _u, ...saved } = await setSettings(s);
+      setS(saved);
+      alert("Settings saved");
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   if (loading) return null;
@@ -68,25 +63,27 @@ function Page() {
           <label className="text-sm font-medium">Event name</label>
           <input
             className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.name || ""}
-            onChange={(e) => setS((v) => ({ ...v, name: e.target.value }))}
+            value={s.eventName}
+            onChange={(e) => setS((v) => ({ ...v, eventName: e.target.value }))}
           />
         </div>
         <div>
           <label className="text-sm font-medium">Phase</label>
           <select
             className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.phase || "submission"}
+            value={s.phase}
             onChange={(e) =>
               setS((v) => ({
                 ...v,
-                phase: e.target.value as Settings["phase"]
+                phase: e.target.value as Phase
               }))
             }
           >
-            <option value="submission">Submission</option>
-            <option value="judging">Judging</option>
-            <option value="closed">Closed</option>
+            {PHASES.map((p) => (
+              <option key={p} value={p}>
+                {PHASE_LABELS[p]}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -98,11 +95,11 @@ function Page() {
             type="number"
             min={1}
             className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.requiredJudgeCount || 1}
+            value={s.perTeamJudges || 1}
             onChange={(e) =>
               setS((v) => ({
                 ...v,
-                requiredJudgeCount: Math.max(1, Number(e.target.value || 1))
+                perTeamJudges: Math.max(1, Number(e.target.value || 1))
               }))
             }
           />
@@ -113,7 +110,7 @@ function Page() {
             type="number"
             min={0}
             className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.maxImages ?? 10}
+            value={s.maxImages}
             onChange={(e) =>
               setS((v) => ({
                 ...v,
@@ -123,10 +120,26 @@ function Page() {
           />
         </div>
 
+        <div>
+          <label className="text-sm font-medium">Finalists (top N)</label>
+          <input
+            type="number"
+            min={1}
+            className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
+            value={s.finalsTopN}
+            onChange={(e) =>
+              setS((v) => ({
+                ...v,
+                finalsTopN: Math.max(1, Number(e.target.value || 1))
+              }))
+            }
+          />
+        </div>
+
         <label className="mt-2 inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={!!s.lockSubmissions}
+            checked={s.lockSubmissions}
             onChange={(e) =>
               setS((v) => ({ ...v, lockSubmissions: e.target.checked }))
             }
@@ -137,7 +150,7 @@ function Page() {
         <label className="mt-2 inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={s.showTeamFeedback !== false}
+            checked={s.showTeamFeedback}
             onChange={(e) =>
               setS((v) => ({ ...v, showTeamFeedback: e.target.checked }))
             }
@@ -148,7 +161,7 @@ function Page() {
         <label className="mt-2 inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={!!s.allowJudgeSeeOthers}
+            checked={s.allowJudgeSeeOthers}
             onChange={(e) =>
               setS((v) => ({ ...v, allowJudgeSeeOthers: e.target.checked }))
             }
@@ -159,7 +172,7 @@ function Page() {
         <label className="mt-2 inline-flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            checked={!!s.anonymizeTeams}
+            checked={s.anonymizeTeams}
             onChange={(e) =>
               setS((v) => ({ ...v, anonymizeTeams: e.target.checked }))
             }
@@ -167,6 +180,8 @@ function Page() {
           Anonymize team names for judges
         </label>
       </div>
+
+      {error && <div className="mt-4 text-sm text-red-500">{error}</div>}
 
       <div className="mt-6">
         <button

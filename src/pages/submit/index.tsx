@@ -3,124 +3,65 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID, storage } from "@/lib/firebase";
-import { deleteField, doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { errorMessage, getSettings, getTeam, updateTeam } from "@/lib/data";
 import { useClientSession } from "@/lib/session";
-
-type EventSettings = {
-  lockSubmissions?: boolean;
-  maxImages?: number;
-};
-
-type TeamDoc = {
-  id: string;
-  name?: string;
-  teamCode?: string;
-  github?: string;
-  devpost?: string;
-  description?: string;
-  imageUrls?: string[];
-};
+import { usePoll } from "@/lib/usePoll";
 
 function Page() {
   const { ready, session } = useClientSession();
-  const [team, setTeam] = useState<TeamDoc | null>(null);
-  const [settings, setSettings] = useState<EventSettings | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [github, setGithub] = useState("");
   const [devpost, setDevpost] = useState("");
   const [desc, setDesc] = useState("");
-  const [files, setFiles] = useState<FileList | null>(null);
+  // Images are URLs now (uploads went with Firebase Storage). One per line.
+  const [imageText, setImageText] = useState("");
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
+  const teamId = session?.role === "team" ? session.id : undefined;
+  const { data: settings } = usePoll(ready ? getSettings : null, [ready], 10000);
+  const teamPoll = usePoll(ready && teamId ? () => getTeam(teamId) : null, [teamId], 15000);
+  const team = teamPoll.data ?? null;
+
+  // Seed the form once per team load, so polling does not clobber edits in progress.
   useEffect(() => {
-    if (!ready) return;
-    const unsubs: Array<() => void> = [];
+    if (!team || loadedFor === team.id) return;
+    setGithub(team.github || "");
+    setDevpost(team.devpost || "");
+    setDesc(team.description || "");
+    setImageText((team.imageUrls || []).join("\n"));
+    setLoadedFor(team.id);
+  }, [team, loadedFor]);
 
-    unsubs.push(
-      onSnapshot(doc(db, "events", EVENT_ID), (sSnap) => {
-        setSettings(sSnap.exists() ? (sSnap.data() as EventSettings) : {});
-      })
-    );
-
-    if (session?.role === "team") {
-      const tRef = doc(db, "events", EVENT_ID, "teams", session.teamId);
-      unsubs.push(
-        onSnapshot(tRef, (tSnap) => {
-          if (!tSnap.exists()) {
-            setTeam(null);
-            return;
-          }
-          const data: TeamDoc = {
-            id: tSnap.id,
-            ...(tSnap.data() as Partial<TeamDoc>)
-          };
-          setTeam(data);
-          setGithub(data.github || "");
-          setDevpost(data.devpost || "");
-          setDesc(data.description || "");
-        })
-      );
-    }
-
-    return () => {
-      unsubs.forEach((u) => u());
-    };
-  }, [ready, session]);
-
-  async function handleUploadImages(
-    teamId: string,
-    teamCode: string
-  ): Promise<string[]> {
-    if (!files || !files.length) return [];
-    const max = settings?.maxImages ?? 10;
-    const limit = Math.min(files.length, max);
-    const urls: string[] = [];
-    for (let i = 0; i < limit; i++) {
-      const f = files[i];
-      const path = `events/${EVENT_ID}/teams/${teamId}/${Date.now()}_${i}_${
-        f.name
-      }`;
-      const r = ref(storage, path);
-      await uploadBytes(r, f, { customMetadata: { teamId, teamCode } });
-      urls.push(await getDownloadURL(r));
-    }
-    return urls;
-  }
+  const closed = !!settings && (settings.lockSubmissions || settings.phase !== "submission");
 
   async function save() {
     if (!team) return;
-    if (settings?.lockSubmissions) {
+    if (closed) {
       alert("Submissions are locked.");
       return;
     }
     setBusy(true);
     try {
-      const extra = await handleUploadImages(team.id, team.teamCode || "");
       const max = settings?.maxImages ?? 10;
-      const imageUrls = [...(team.imageUrls || []), ...extra].slice(0, max);
-      await updateDoc(doc(db, "events", EVENT_ID, "teams", team.id), {
+      const imageUrls = imageText
+        .split(/\r?\n/)
+        .map((u) => u.trim())
+        .filter(Boolean)
+        .slice(0, max);
+      await updateTeam(team.id, {
+        name: team.name,
+        members: team.members,
         github,
         devpost,
         description: desc,
         imageUrls,
-        teamCode: team.teamCode || "",
-        techStack: deleteField()
       });
-      setTeam((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          github,
-          devpost,
-          description: desc,
-          imageUrls
-        };
-      });
+      setImageText(imageUrls.join("\n"));
+      await teamPoll.refresh();
       alert("Submission saved!");
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Error saving.");
+      alert(errorMessage(e) || "Error saving.");
     } finally {
       setBusy(false);
     }
@@ -138,7 +79,7 @@ function Page() {
           </h1>
           <p className="mt-3 text-sm text-slate-400">Edit links, summary, and images.</p>
 
-          {settings?.lockSubmissions && (
+          {closed && (
             <p className="mt-4 rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
               Submissions are currently locked.
             </p>
@@ -180,22 +121,22 @@ function Page() {
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                  Media Upload
+                  Image URLs
                 </div>
                 <div className="mt-1 text-xs text-slate-400">
-                  Max images: {settings?.maxImages ?? 10}
+                  One link per line (host them anywhere public). Max images: {settings?.maxImages ?? 10}
                 </div>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={(e) => setFiles(e.target.files)}
-                  className="mt-3 block w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-300 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-900"
+                <textarea
+                  value={imageText}
+                  onChange={(e) => setImageText(e.target.value)}
+                  rows={4}
+                  className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-slate-100 placeholder:text-slate-500"
+                  placeholder={"https://…/screenshot-1.png\nhttps://…/screenshot-2.png"}
                 />
               </div>
 
               <button
-                disabled={busy || settings?.lockSubmissions}
+                disabled={busy || closed}
                 onClick={save}
                 className="rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -232,7 +173,7 @@ function Page() {
                 Submission Lock
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-100">
-                {settings?.lockSubmissions ? "Locked" : "Open"}
+                {closed ? "Locked" : "Open"}
               </p>
             </div>
           </div>
@@ -240,10 +181,10 @@ function Page() {
           {!!team?.imageUrls?.length && (
             <div className="mt-5">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                Uploaded Images
+                Current Images
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {team.imageUrls.map((u: string, i: number) => (
+                {team.imageUrls.map((u, i) => (
                   <img
                     key={i}
                     src={u}

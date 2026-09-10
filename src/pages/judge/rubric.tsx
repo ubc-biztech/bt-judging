@@ -1,29 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { db, EVENT_ID } from "@/lib/firebase";
+import { getRubric } from "@/lib/data";
 import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
-import { Rubric } from "@/lib/types";
-import { doc, onSnapshot } from "firebase/firestore";
+import { usePoll } from "@/lib/usePoll";
 
 function Page() {
-  const [rubric, setRubric] = useState<Rubric>(normalizeRubric());
+  const { data: serverRubric, loading } = usePoll(getRubric, []);
+  const rubric = useMemo(
+    () => (serverRubric ? normalizeRubric(serverRubric) : null),
+    [serverRubric]
+  );
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "events", EVENT_ID, "rubric", "default"), (snap) => {
-      if (snap.exists()) {
-        setRubric(normalizeRubric(snap.data() as Partial<Rubric>));
-        return;
-      }
-      setRubric(normalizeRubric());
-    });
-
-    return () => unsub();
-  }, []);
-
-  const totalMax = rubricTotalMax(rubric);
+  const totalMax = rubric ? rubricTotalMax(rubric) : 0;
 
   return (
     <Layout>
@@ -38,26 +29,32 @@ function Page() {
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {rubric.criteria.map((criterion) => (
-              <div
-                key={criterion.id}
-                className="rounded-2xl border border-white/10 bg-black/20 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="text-sm font-semibold text-slate-100">
-                    {criterion.label}
+          {rubric ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {rubric.criteria.map((criterion) => (
+                <div
+                  key={criterion.id}
+                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-100">
+                      {criterion.label}
+                    </div>
+                    <span className="rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-200">
+                      /{criterion.maxScore}
+                    </span>
                   </div>
-                  <span className="rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-200">
-                    /{criterion.maxScore}
-                  </span>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                    {criterion.description}
+                  </p>
                 </div>
-                <p className="mt-3 text-xs leading-5 text-slate-400">
-                  {criterion.description}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">
+              {loading ? "Loading rubric…" : "The organizers have not set a rubric yet."}
+            </div>
+          )}
         </section>
       </div>
     </Layout>

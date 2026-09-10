@@ -3,31 +3,10 @@
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  addDoc,
-  collection,
-  deleteField,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc
-} from "firebase/firestore";
-import { getSession } from "@/lib/session";
+import { createTeam as apiCreateTeam, deleteTeam, errorMessage, listTeams, updateTeam } from "@/lib/data";
+import { EVENT_ID } from "@/lib/event";
+import type { Team } from "@/lib/types";
 import Link from "next/link";
-
-type Team = {
-  id: string;
-  name: string;
-  members: string[];
-  teamCode?: string;
-  github?: string;
-  devpost?: string;
-  description?: string;
-};
 
 export default function AdminTeams() {
   return (
@@ -42,32 +21,19 @@ export default function AdminTeams() {
 function Page() {
   const [list, setList] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", members: "", teamCode: "" });
-  const admin = getSession();
-  const adminCode = admin?.role === "admin" ? admin.adminCode : "ADMIN";
+  const [form, setForm] = useState({ name: "", members: "" });
+  const [error, setError] = useState("");
+  const [lastCreated, setLastCreated] = useState<Team | null>(null);
 
   async function load() {
     setLoading(true);
-    const qt = query(
-      collection(db, "events", EVENT_ID, "teams"),
-      orderBy("name")
-    );
-    const snap = await getDocs(qt);
-    setList(
-      snap.docs.map((d) => {
-        const data = d.data() as Partial<Team>;
-        return {
-          id: d.id,
-          name: data.name || "",
-          members: Array.isArray(data.members) ? data.members : [],
-          teamCode: data.teamCode || "",
-          github: data.github || "",
-          devpost: data.devpost || "",
-          description: data.description || ""
-        };
-      })
-    );
-    setLoading(false);
+    try {
+      setList(await listTeams());
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => {
     load();
@@ -75,44 +41,51 @@ function Page() {
 
   async function createTeam() {
     if (!form.name) return alert("Team name required");
-    await addDoc(collection(db, "events", EVENT_ID, "teams"), {
-      name: form.name,
-      members: form.members
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      github: "",
-      devpost: "",
-      description: "",
-      teamCode: form.teamCode || "",
-      imageUrls: [],
-      createdAt: serverTimestamp(),
-      _adminJudgeId: "admin",
-      _adminJudgeCode: adminCode
-    });
-    setForm({ name: "", members: "", teamCode: "" });
-    await load();
+    setError("");
+    try {
+      // The server assigns the id and mints the login code.
+      const created = await apiCreateTeam({
+        name: form.name,
+        members: form.members
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        imageUrls: []
+      });
+      setLastCreated(created);
+      setForm({ name: "", members: "" });
+      await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   async function saveTeam(t: Team) {
-    await updateDoc(doc(db, "events", EVENT_ID, "teams", t.id), {
-      name: t.name,
-      members: t.members,
-      teamCode: t.teamCode || "",
-      github: t.github || "",
-      devpost: t.devpost || "",
-      description: t.description || "",
-      techStack: deleteField(),
-      _adminJudgeId: "admin",
-      _adminJudgeCode: adminCode
-    });
-    await load();
+    setError("");
+    try {
+      await updateTeam(t.id, {
+        name: t.name,
+        members: t.members,
+        github: t.github || undefined,
+        devpost: t.devpost || undefined,
+        description: t.description || undefined,
+        imageUrls: t.imageUrls || []
+      });
+      await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   async function removeTeam(t: Team) {
-    if (!confirm(`Delete team "${t.name}"?`)) return;
-    await deleteDoc(doc(db, "events", EVENT_ID, "teams", t.id));
-    await load();
+    if (!confirm(`Delete team "${t.name}"? This also deletes its reviews.`)) return;
+    setError("");
+    try {
+      await deleteTeam(t.id);
+      await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }
 
   function exportTeamsCsv() {
@@ -127,7 +100,7 @@ function Page() {
       lines.push(
         [
           csvCell(team.name || ""),
-          csvCell(team.teamCode || ""),
+          csvCell(team.code || ""),
           csvCell(team.id),
           csvCell((team.members || []).join(", "))
         ].join(",")
@@ -160,9 +133,20 @@ function Page() {
         <div>
           <div className="text-lg font-semibold text-slate-50">Create Team</div>
           <p className="mt-1 text-sm text-slate-400">
-            Add a team name, members, and an optional access code.
+            Add a team name and members. A login code is generated for the team.
           </p>
         </div>
+        {error && (
+          <div className="mt-3 rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+            {error}
+          </div>
+        )}
+        {lastCreated && (
+          <div className="mt-3 rounded-lg border border-emerald-300/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+            Created “{lastCreated.name}”. Login code:{" "}
+            <span className="font-mono font-semibold">{lastCreated.code}</span>
+          </div>
+        )}
         <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center">
           <input
             className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
@@ -175,12 +159,6 @@ function Page() {
             placeholder="Members (comma-separated)"
             value={form.members}
             onChange={(e) => setForm({ ...form, members: e.target.value })}
-          />
-          <input
-            className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
-            placeholder="Team Code (optional)"
-            value={form.teamCode}
-            onChange={(e) => setForm({ ...form, teamCode: e.target.value })}
           />
           <button
             onClick={createTeam}
@@ -305,11 +283,9 @@ function EditableTeamRow({
       </td>
 
       <td className="px-4 py-3">
-        <input
-          className="w-36 rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
-          value={edit.teamCode || ""}
-          onChange={(e) => setEdit({ ...edit, teamCode: e.target.value })}
-        />
+        <span className="font-mono text-sm" title="Login code (server-generated)">
+          {t.code || "—"}
+        </span>
       </td>
 
       <td className="px-4 py-3">

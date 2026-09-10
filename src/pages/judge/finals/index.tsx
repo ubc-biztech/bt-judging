@@ -1,26 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useClientSession } from "@/lib/session";
-import { db, EVENT_ID } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  where
-} from "firebase/firestore";
+import { getSettings, listReviews, listTeams } from "@/lib/data";
+import { usePoll } from "@/lib/usePoll";
+import { Team } from "@/lib/types";
 import Link from "next/link";
-
-type Team = { id: string; name: string; members?: string[] };
-type EventSettings = {
-  phase?: string;
-  finalsJudgeIds?: string[];
-  finalsTeamIds?: string[];
-};
 
 export default function JudgeFinalsIndex() {
   return (
@@ -35,66 +23,41 @@ export default function JudgeFinalsIndex() {
 function Page() {
   const router = useRouter();
   const { ready, session } = useClientSession();
-  const judgeId = ready && session?.role === "judge" ? session.judgeId : null;
+  const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const [settings, setSettings] = useState<EventSettings | null>(null);
-  const [teamMap, setTeamMap] = useState<Record<string, Team>>({});
-  const [finalsTeamIds, setFinalsTeamIds] = useState<string[]>([]);
-  const [judgedIds, setJudgedIds] = useState<Set<string>>(new Set());
+  const { data: settings } = usePoll(ready && judgeId ? getSettings : null, [ready, judgeId]);
+  const { data: teamList } = usePoll(ready && judgeId ? listTeams : null, [ready, judgeId]);
 
+  const fetchMyFinals = useCallback(
+    () => listReviews({ judgeId: judgeId as string, round: "finals" }),
+    [judgeId]
+  );
+  const { data: myFinals } = usePoll(ready && judgeId ? fetchMyFinals : null, [ready, judgeId]);
+
+  // Not in finals, or not a finals judge: back to the judge home.
   useEffect(() => {
-    if (!ready || !judgeId) return;
-    const unsubSettings = onSnapshot(doc(db, "events", EVENT_ID), (snap) => {
-      const sData = (snap.exists() ? snap.data() : {}) as EventSettings;
-      setSettings(sData);
-      if (sData.phase !== "finals") {
-        router.replace("/judge");
-        return;
-      }
-      const finalsJudgeIds: string[] = sData.finalsJudgeIds || [];
-      if (!finalsJudgeIds.includes(judgeId)) {
-        router.replace("/judge");
-        return;
-      }
-      setFinalsTeamIds((sData.finalsTeamIds || []) as string[]);
-    });
+    if (!settings || !judgeId) return;
+    if (settings.phase !== "finals") {
+      router.replace("/judge");
+      return;
+    }
+    if (!settings.finalsJudgeIds.includes(judgeId)) {
+      router.replace("/judge");
+    }
+  }, [settings, judgeId, router]);
 
-    const unsubTeams = onSnapshot(
-      collection(db, "events", EVENT_ID, "teams"),
-      (snap) => {
-        const next: Record<string, Team> = {};
-        snap.forEach((d) => {
-          const data = d.data() as Partial<Team>;
-          next[d.id] = {
-            id: d.id,
-            name: data.name || d.id,
-            members: data.members
-          };
-        });
-        setTeamMap(next);
-      }
-    );
+  const finalsTeamIds = settings?.finalsTeamIds ?? [];
 
-    const rq = query(
-      collection(db, "events", EVENT_ID, "reviews"),
-      where("judgeId", "==", judgeId),
-      where("round", "==", "finals")
-    );
-    const unsubReviews = onSnapshot(rq, (snap) => {
-      const done = new Set<string>();
-      snap.forEach((d) => {
-        const teamId = (d.data() as { teamId?: string }).teamId;
-        if (teamId) done.add(teamId);
-      });
-      setJudgedIds(done);
-    });
+  const teamMap = useMemo(() => {
+    const next: Record<string, Team> = {};
+    for (const t of teamList ?? []) next[t.id] = t;
+    return next;
+  }, [teamList]);
 
-    return () => {
-      unsubSettings();
-      unsubTeams();
-      unsubReviews();
-    };
-  }, [ready, judgeId, router]);
+  const judgedIds = useMemo(
+    () => new Set((myFinals ?? []).map((r) => r.teamId)),
+    [myFinals]
+  );
 
   const teams = useMemo(
     () => finalsTeamIds.map((id) => teamMap[id]).filter(Boolean),

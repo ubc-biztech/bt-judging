@@ -1,41 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // pages/team/feedback.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
+import { errorMessage, getRubric, getSettings, getTeam, listReviews } from "@/lib/data";
+import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
-import { db, EVENT_ID } from "@/lib/firebase";
-import { Criterion, Rubric } from "@/lib/types";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  where
-} from "firebase/firestore";
-
-type Review = {
-  id: string;
-  teamId: string;
-  judgeId: string;
-  judgeName?: string;
-  total: number;
-  weightedTotal: number;
-  scores?: Record<string, number>;
-  feedback?: string;
-  round?: "prelim" | "finals";
-  createdAt?: any;
-};
-
-type Team = {
-  id: string;
-  name: string;
-  members?: string[];
-  track?: string;
-};
+import { Criterion, Review, Rubric, Team } from "@/lib/types";
+import { usePoll } from "@/lib/usePoll";
 
 export default function TeamFeedbackPage() {
   return (
@@ -49,105 +23,23 @@ export default function TeamFeedbackPage() {
 
 function Page() {
   const { ready, session } = useClientSession();
-  const [team, setTeam] = useState<Team | null>(null);
-  const [rubric, setRubric] = useState<Rubric | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [canViewFeedback, setCanViewFeedback] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"prelim" | "finals">("prelim");
 
-  const teamId = (session as any)?.teamId as string | undefined;
+  const teamId = session?.role === "team" ? session.id : undefined;
+  const active = ready && !!teamId;
 
-  useEffect(() => {
-    if (!ready) return;
-    if (!teamId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+  const settingsPoll = usePoll(active ? getSettings : null, [active], 10000);
+  const teamPoll = usePoll(active ? () => getTeam(teamId!) : null, [teamId], 15000);
+  const rubricPoll = usePoll(active ? getRubric : null, [active], 15000);
+  // The server refuses (403) until results are public; treat that as "not yet", not an error.
+  const reviewsPoll = usePoll(active ? () => listReviews({ teamId: teamId! }) : null, [teamId]);
 
-    const readyFlags = {
-      settings: false,
-      team: false,
-      rubric: false,
-      reviews: false
-    };
-    const markReady = (key: keyof typeof readyFlags) => {
-      readyFlags[key] = true;
-      if (Object.values(readyFlags).every(Boolean)) {
-        setLoading(false);
-      }
-    };
-
-    const unsubSettings = onSnapshot(
-      doc(db, "events", EVENT_ID),
-      (sSnap) => {
-        const settings = sSnap.exists() ? (sSnap.data() as any) : {};
-        if (settings.showTeamFeedback === false) {
-          setCanViewFeedback(false);
-          setTeam(null);
-          setRubric(null);
-          setReviews([]);
-        } else {
-          setCanViewFeedback(true);
-        }
-        markReady("settings");
-      },
-      () => markReady("settings")
-    );
-
-    const unsubTeam = onSnapshot(
-      doc(db, "events", EVENT_ID, "teams", teamId),
-      (tSnap) => {
-        if (tSnap.exists()) {
-          setTeam({ id: tSnap.id, ...(tSnap.data() as any) });
-        } else {
-          setTeam(null);
-        }
-        markReady("team");
-      },
-      () => markReady("team")
-    );
-
-    const unsubRubric = onSnapshot(
-      doc(db, "events", EVENT_ID, "rubric", "default"),
-      (rSnap) => {
-        if (rSnap.exists()) {
-          setRubric(normalizeRubric(rSnap.data() as Partial<Rubric>));
-        } else {
-          setRubric(normalizeRubric());
-        }
-        markReady("rubric");
-      },
-      () => markReady("rubric")
-    );
-
-    const rq = query(
-      collection(db, "events", EVENT_ID, "reviews"),
-      where("teamId", "==", teamId)
-    );
-    const unsubReviews = onSnapshot(
-      rq,
-      (rs) => {
-        const list: Review[] = [];
-        rs.forEach((d) => {
-          const v = { id: d.id, ...(d.data() as any) } as Review;
-          const round = (v.round || "prelim") as "prelim" | "finals";
-          list.push({ ...v, round });
-        });
-        setReviews(list);
-        markReady("reviews");
-      },
-      () => markReady("reviews")
-    );
-
-    return () => {
-      unsubSettings();
-      unsubTeam();
-      unsubRubric();
-      unsubReviews();
-    };
-  }, [ready, teamId]);
+  const canViewFeedback = settingsPoll.data?.showTeamFeedback !== false && !reviewsPoll.error;
+  const reviewsError = reviewsPoll.error ? errorMessage(reviewsPoll.error) : "";
+  const loading = !ready || (active && (settingsPoll.loading || teamPoll.loading || rubricPoll.loading || reviewsPoll.loading));
+  const team: Team | null = canViewFeedback ? (teamPoll.data ?? null) : null;
+  const rubric: Rubric | null = useMemo(() => (rubricPoll.data === null ? null : normalizeRubric(rubricPoll.data)), [rubricPoll.data]);
+  const reviews: Review[] = useMemo(() => (canViewFeedback ? (reviewsPoll.data ?? []) : []), [canViewFeedback, reviewsPoll.data]);
 
   const prelimReviews = useMemo(
     () => reviews.filter((r) => (r.round || "prelim") === "prelim"),
@@ -165,16 +57,11 @@ function Page() {
   const pointTotals = rubricUsesPointTotals(rubric);
 
   const sorted = useMemo(
-    () =>
-      [...current].sort((a, b) => {
-        const at = a.createdAt?.toMillis?.() ?? 0;
-        const bt = b.createdAt?.toMillis?.() ?? 0;
-        return bt - at;
-      }),
+    () => [...current].sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || "")),
     [current]
   );
 
-  function csvCell(v: any) {
+  function csvCell(v: unknown) {
     const s = v == null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }
@@ -226,7 +113,7 @@ function Page() {
           csvCell(Number(r.total || 0).toFixed(2)),
           csvCell(Number(r.weightedTotal || 0).toFixed(2)),
           csvCell(r.feedback || ""),
-          csvCell(r.createdAt?.toDate ? r.createdAt.toDate().toISOString() : "")
+          csvCell(r.completedAt || "")
         ].join(",")
       );
     });
@@ -241,7 +128,7 @@ function Page() {
     return (
       <div className="max-w-3xl">
         <div className="rounded-2xl border border-gray-200 p-4 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">
-          Feedback is hidden right now.
+          Feedback is hidden right now.{reviewsError ? ` (${reviewsError})` : ""}
         </div>
       </div>
     );
@@ -281,11 +168,6 @@ function Page() {
             <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Members: {team.members?.join(", ") || "—"}
             </div>
-            {team.track && (
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Track: {team.track}
-              </div>
-            )}
           </>
         ) : (
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -380,8 +262,8 @@ function Page() {
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        {r.createdAt?.toDate
-                          ? r.createdAt.toDate().toLocaleString()
+                        {r.completedAt
+                          ? new Date(r.completedAt).toLocaleString()
                           : "—"}
                       </td>
                     </tr>
