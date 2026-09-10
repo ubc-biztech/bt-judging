@@ -39,7 +39,7 @@ export default function RubricForm({
 }) {
   const [scores, setScores] = useState<Record<string, number>>({});
   const [feedback, setFeedback] = useState("");
-  const pointTotals = rubricUsesPointTotals({ criteria, scaleMax, scoreMode });
+  const pointTotals = rubricUsesPointTotals({ criteria, scaleMax, scoreMode: scoreMode ?? "points" });
   const totalMax = rubricTotalMax({ criteria, scaleMax });
 
   useEffect(() => {

@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { autoAssign } from "@/lib/firestore";
+import { autoAssign, errorMessage } from "@/lib/data";
 
 export default function AdminAssign() {
   const [perTeamJudges, setPerTeamJudges] = useState(2);
-  const [adminCode, setAdminCode] = useState("");
   const [status, setStatus] = useState<string>("");
 
   return (
@@ -11,7 +10,7 @@ export default function AdminAssign() {
       <div className="text-lg font-semibold text-gray-900 dark:text-white">
         Auto-Assign Judges
       </div>
-      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input
           type="number"
           min={1}
@@ -20,20 +19,14 @@ export default function AdminAssign() {
           className="rounded-xl border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
           placeholder="Judges per team"
         />
-        <input
-          value={adminCode}
-          onChange={(e) => setAdminCode(e.target.value)}
-          className="rounded-xl border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-          placeholder="Admin code"
-        />
         <button
           onClick={async () => {
             setStatus("Assigning…");
             try {
-              const res = await autoAssign({ perTeamJudges, adminCode });
+              const res = await autoAssign(perTeamJudges);
               setStatus(`Assigned to ${Object.keys(res).length} judges.`);
-            } catch (e: any) {
-              setStatus(`Error: ${e.message}`);
+            } catch (e) {
+              setStatus(`Error: ${errorMessage(e)}`);
             }
           }}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
