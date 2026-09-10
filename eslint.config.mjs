@@ -10,15 +10,11 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  // A config object with only `ignores` is a global ignore; combined with `rules` it would
+  // merely scope those rules, and .next/ would still be linted.
+  { ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [
-      "node_modules/**",
-      ".next/**",
-      "out/**",
-      "build/**",
-      "next-env.d.ts"
-    ],
     rules: {
       "@next/next/no-document-import-in-page": "off"
     }
