@@ -4,10 +4,10 @@ import { useCallback, useMemo } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import TeamCard from "@/components/TeamCard";
-import { Team } from "@/lib/types";
-import { getJudge, getSettings, listReviews, listTeams } from "@/lib/data";
 import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
+import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
 
 function Page() {
   const { ready, session } = useClientSession();
@@ -15,14 +15,14 @@ function Page() {
   const judgeName =
     ready && session?.role === "judge" ? session.name || "Judge" : "Judge";
 
-  const { data: settings } = usePoll(getSettings, []);
-  const { data: teamList } = usePoll(listTeams, []);
+  const { data: settings } = usePoll(settingsOrDefaults, []);
+  const { data: teamList } = usePoll(() => judging().teams.list(), []);
 
-  const fetchJudge = useCallback(() => getJudge(judgeId as string), [judgeId]);
+  const fetchJudge = useCallback(() => orNull(judging().judge(judgeId as string).get()), [judgeId]);
   const { data: judge } = usePoll(judgeId ? fetchJudge : null, [judgeId]);
 
   const fetchMyReviews = useCallback(
-    () => listReviews({ judgeId: judgeId as string, round: "prelim" }),
+    () => judging().reviews.list({ judgeId: judgeId as string, round: "prelim" }),
     [judgeId]
   );
   const { data: myReviews } = usePoll(judgeId ? fetchMyReviews : null, [judgeId]);

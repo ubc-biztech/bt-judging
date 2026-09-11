@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { errorMessage, getSettings, getTeam, updateTeam } from "@/lib/data";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
+import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
 
 function Page() {
   const { ready, session } = useClientSession();
@@ -19,8 +19,8 @@ function Page() {
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   const teamId = session?.role === "team" ? session.id : undefined;
-  const { data: settings } = usePoll(ready ? getSettings : null, [ready], 10000);
-  const teamPoll = usePoll(ready && teamId ? () => getTeam(teamId) : null, [teamId], 15000);
+  const { data: settings } = usePoll(ready ? settingsOrDefaults : null, [ready], 10000);
+  const teamPoll = usePoll(ready && teamId ? () => orNull(judging().team(teamId).get()) : null, [teamId], 15000);
   const team = teamPoll.data ?? null;
 
   // Seed the form once per team load, so polling does not clobber edits in progress.
@@ -49,7 +49,7 @@ function Page() {
         .map((u) => u.trim())
         .filter(Boolean)
         .slice(0, max);
-      await updateTeam(team.id, {
+      await judging().team(team.id).update({
         name: team.name,
         members: team.members,
         github,

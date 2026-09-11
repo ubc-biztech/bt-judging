@@ -4,12 +4,13 @@
 import { useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { errorMessage, getRubric, getSettings, getTeam, listReviews } from "@/lib/data";
 import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
-import { Criterion, Review, Rubric, Team } from "@/lib/types";
 import { usePoll } from "@/lib/usePoll";
+import type { Review, JudgingRubricSetInput as Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import type { Criterion } from "@/lib/types";
+import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
 
 export default function TeamFeedbackPage() {
   return (
@@ -28,11 +29,11 @@ function Page() {
   const teamId = session?.role === "team" ? session.id : undefined;
   const active = ready && !!teamId;
 
-  const settingsPoll = usePoll(active ? getSettings : null, [active], 10000);
-  const teamPoll = usePoll(active ? () => getTeam(teamId!) : null, [teamId], 15000);
-  const rubricPoll = usePoll(active ? getRubric : null, [active], 15000);
+  const settingsPoll = usePoll(active ? settingsOrDefaults : null, [active], 10000);
+  const teamPoll = usePoll(active ? () => orNull(judging().team(teamId!).get()) : null, [teamId], 15000);
+  const rubricPoll = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active], 15000);
   // The server refuses (403) until results are public; treat that as "not yet", not an error.
-  const reviewsPoll = usePoll(active ? () => listReviews({ teamId: teamId! }) : null, [teamId]);
+  const reviewsPoll = usePoll(active ? () => judging().reviews.list({ teamId: teamId! }) : null, [teamId]);
 
   const canViewFeedback = settingsPoll.data?.showTeamFeedback !== false && !reviewsPoll.error;
   const reviewsError = reviewsPoll.error ? errorMessage(reviewsPoll.error) : "";

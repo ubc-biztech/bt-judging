@@ -3,9 +3,9 @@
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import { DEFAULT_SETTINGS, PHASES, errorMessage, getSettings, setSettings } from "@/lib/data";
-import type { Phase } from "@/lib/types";
 import type { JudgingSettingsSetInput as Settings } from "@ubc-biztech/sdk";
+import type { Phase } from "@/lib/types";
+import { judging, errorMessage, settingsOrDefaults, DEFAULT_SETTINGS, PHASES } from "@/lib/bt";
 
 const PHASE_LABELS: Record<Phase, string> = {
   submission: "Submission",
@@ -32,7 +32,7 @@ function Page() {
   useEffect(() => {
     (async () => {
       try {
-        const { updatedAt: _u, ...current } = await getSettings();
+        const { updatedAt: _u, ...current } = await settingsOrDefaults();
         setS(current);
       } catch (e) {
         setError(errorMessage(e));
@@ -44,7 +44,7 @@ function Page() {
   async function save() {
     setError(null);
     try {
-      const { updatedAt: _u, ...saved } = await setSettings(s);
+      const { updatedAt: _u, ...saved } = await judging().settings.set(s);
       setS(saved);
       alert("Settings saved");
     } catch (e) {

@@ -4,18 +4,11 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import {
-  errorMessage,
-  getRubric,
-  getSettings,
-  getTeam,
-  listReviews,
-  submitReview
-} from "@/lib/data";
 import { normalizeRubric } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 import RubricForm from "@/components/RubricForm";
+import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
 
 export default function JudgeFinalTeam() {
   return (
@@ -36,12 +29,12 @@ function Page() {
   const [submitting, setSubmitting] = useState(false);
   const active = ready && !!judgeId && !!teamId;
 
-  const { data: settings } = usePoll(active ? getSettings : null, [active]);
+  const { data: settings } = usePoll(active ? settingsOrDefaults : null, [active]);
 
-  const fetchTeam = useCallback(() => getTeam(teamId), [teamId]);
+  const fetchTeam = useCallback(() => orNull(judging().team(teamId).get()), [teamId]);
   const { data: team } = usePoll(active ? fetchTeam : null, [active, teamId]);
 
-  const { data: serverRubric, loading: rubricLoading } = usePoll(active ? getRubric : null, [active]);
+  const { data: serverRubric, loading: rubricLoading } = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active]);
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]
@@ -49,7 +42,7 @@ function Page() {
 
   const fetchExisting = useCallback(
     async () =>
-      (await listReviews({ teamId, judgeId: judgeId as string, round: "finals" }))[0] ?? null,
+      (await judging().reviews.list({ teamId, judgeId: judgeId as string, round: "finals" }))[0] ?? null,
     [teamId, judgeId]
   );
   const { data: existing, refresh: refreshExisting } = usePoll(active ? fetchExisting : null, [active, teamId, judgeId]);
@@ -89,7 +82,7 @@ function Page() {
     setSubmitting(true);
     try {
       // Phase is "finals" here, so the server files this as a finals review and computes totals.
-      await submitReview(team.id, scores, feedback);
+      await judging().reviews.submit({ teamId: team.id, scores: scores, feedback: feedback });
       alert("Finals review submitted!");
       await refreshExisting();
     } catch (e) {

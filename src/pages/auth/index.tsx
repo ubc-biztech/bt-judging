@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
-import { errorMessage, login } from "@/lib/data";
 import { getSession } from "@/lib/session";
+import { login, errorMessage } from "@/lib/bt";
 
 const HOME: Record<"admin" | "judge" | "team", string> = { admin: "/admin", judge: "/judge", team: "/submit" };
 

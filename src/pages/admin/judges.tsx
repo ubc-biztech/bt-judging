@@ -5,14 +5,8 @@ import dynamic from "next/dynamic";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import {
-  createJudge as apiCreateJudge,
-  deleteJudge,
-  errorMessage,
-  listJudges,
-  updateJudge
-} from "@/lib/data";
-import type { Judge } from "@/lib/types";
+import type { Judge } from "@ubc-biztech/sdk";
+import { judging, errorMessage } from "@/lib/bt";
 
 function AdminJudgesInner() {
   return (
@@ -35,7 +29,7 @@ function Page() {
   async function load() {
     setLoading(true);
     try {
-      setList(await listJudges());
+      setList(await judging().judges.list());
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -59,23 +53,23 @@ function Page() {
   async function createJudge() {
     if (!newJ.name) return alert("Name required");
     await run(async () => {
-      const j = await apiCreateJudge(newJ.name, newJ.isAdmin);
+      const j = await judging().judges.create({ name: newJ.name, isAdmin: newJ.isAdmin });
       setCreated(j);
       setNewJ({ name: "", isAdmin: false });
     });
   }
 
   async function saveJudge(j: Judge) {
-    await run(() => updateJudge(j.id, { name: j.name, isAdmin: j.isAdmin }));
+    await run(() => judging().judge(j.id).update({ name: j.name, isAdmin: j.isAdmin }));
   }
 
   async function resetAssignments(j: Judge) {
-    await run(() => updateJudge(j.id, { assignedTeamIds: [] }));
+    await run(() => judging().judge(j.id).update({ assignedTeamIds: [] }));
   }
 
   async function removeJudge(j: Judge) {
     if (!confirm(`Delete judge "${j.name}"?`)) return;
-    await run(() => deleteJudge(j.id));
+    await run(() => judging().judge(j.id).delete());
   }
 
   return (

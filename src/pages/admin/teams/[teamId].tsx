@@ -6,20 +6,8 @@ import RoleGate from "@/components/RoleGate";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  createLink,
-  deleteLink,
-  errorMessage,
-  getSettings,
-  getTeam,
-  listJudges,
-  listLinks,
-  listReviews,
-  patchSettings,
-  updateJudge,
-  updateTeam
-} from "@/lib/data";
-import type { Judge, Link as ExtLink, Review, Settings, Team } from "@/lib/types";
+import type { Judge, JudgingLink as ExtLink, Review, JudgingSettings as Settings, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, orNull, errorMessage, settingsOrDefaults, patchSettings } from "@/lib/bt";
 
 export default function AdminTeamDetail() {
   return (
@@ -59,11 +47,11 @@ function Page() {
       setLoading(true);
       try {
         const [sData, t, js, rs, ls] = await Promise.all([
-          getSettings(),
-          getTeam(teamId),
-          listJudges(),
-          listReviews({ teamId }),
-          listLinks()
+          settingsOrDefaults(),
+          orNull(judging().team(teamId).get()),
+          judging().judges.list(),
+          judging().reviews.list({ teamId }),
+          judging().links.list()
         ]);
         setSettings(sData);
         setFinalsSelected((sData.finalsTeamIds || []).includes(teamId));
@@ -121,7 +109,7 @@ function Page() {
     if (!edit) return;
     setSaving(true);
     try {
-      const saved = await updateTeam(edit.id, editable(edit));
+      const saved = await judging().team(edit.id).update(editable(edit));
       setTeam(saved);
       setEdit(saved);
       alert("Saved.");
@@ -155,7 +143,7 @@ function Page() {
     if (!confirmed) return;
 
     try {
-      const saved = await updateTeam(team.id, {
+      const saved = await judging().team(team.id).update({
         name: team.name,
         members: team.members || [],
         imageUrls: []
@@ -171,7 +159,7 @@ function Page() {
   async function setImageUrls(urls: string[]) {
     if (!team) return;
     try {
-      const saved = await updateTeam(team.id, { ...editable(team), imageUrls: urls });
+      const saved = await judging().team(team.id).update({ ...editable(team), imageUrls: urls });
       setTeam(saved);
       setEdit((e) => (e ? { ...e, imageUrls: saved.imageUrls } : e));
     } catch (e) {
@@ -197,7 +185,7 @@ function Page() {
     if (assigned) next.add(teamId);
     else next.delete(teamId);
     try {
-      const saved = await updateJudge(judgeId, { assignedTeamIds: Array.from(next) });
+      const saved = await judging().judge(judgeId).update({ assignedTeamIds: Array.from(next) });
       setJudges((prev) => prev.map((x) => (x.id === judgeId ? saved : x)));
     } catch (e) {
       alert(errorMessage(e));
@@ -212,7 +200,7 @@ function Page() {
     const url = newLink.url.trim();
     if (!title || !url) return alert("Title and URL required.");
     try {
-      const created = await createLink(title, url);
+      const created = await judging().links.create({ label: title, url: url });
       setLinks((l) => [...l, created]);
       setNewLink({ title: "", url: "" });
     } catch (e) {
@@ -222,7 +210,7 @@ function Page() {
 
   async function removeExternalLink(id: string) {
     try {
-      await deleteLink(id);
+      await judging().link(id).delete();
       setLinks((l) => l.filter((x) => x.id !== id));
     } catch (e) {
       alert(errorMessage(e));

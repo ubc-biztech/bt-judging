@@ -4,7 +4,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useClientSession } from "@/lib/session";
-import { getSettings } from "@/lib/data";
+import { settingsOrDefaults } from "@/lib/bt";
 
 export default function Home() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function Home() {
       }
       if (session.role === "judge") {
         try {
-          const settings = await getSettings();
+          const settings = await settingsOrDefaults();
           const finals = settings.phase === "finals";
           if (finals && settings.finalsJudgeIds.includes(session.id)) {
             router.replace("/judge/finals");

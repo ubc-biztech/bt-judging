@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { autoAssign, errorMessage } from "@/lib/data";
+import { judging, errorMessage } from "@/lib/bt";
 
 export default function AdminAssign() {
   const [perTeamJudges, setPerTeamJudges] = useState(2);
@@ -23,7 +23,7 @@ export default function AdminAssign() {
           onClick={async () => {
             setStatus("Assigning…");
             try {
-              const res = await autoAssign(perTeamJudges);
+              const res = await judging().judges.autoAssign({ perTeamJudges });
               setStatus(`Assigned to ${Object.keys(res).length} judges.`);
             } catch (e) {
               setStatus(`Error: ${errorMessage(e)}`);

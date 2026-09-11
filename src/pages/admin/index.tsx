@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { getRubric, getSettings, listJudges, listReviews, listTeams } from "@/lib/data";
 import { OFFICIAL_JUDGING_RUBRIC } from "@/lib/judging";
+import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
 
 type Snapshot = {
   eventName: string;
@@ -48,11 +48,11 @@ function AdminHome() {
   useEffect(() => {
     (async () => {
       const [settings, rubric, teams, judges, reviews] = await Promise.all([
-        getSettings(),
-        getRubric(),
-        listTeams(),
-        listJudges(),
-        listReviews({ round: "prelim" })
+        settingsOrDefaults(),
+        orNull(judging().rubric.get()),
+        judging().teams.list(),
+        judging().judges.list(),
+        judging().reviews.list({ round: "prelim" })
       ]);
 
       const rubricCriteriaCount =

@@ -3,10 +3,10 @@
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import { createTeam as apiCreateTeam, deleteTeam, errorMessage, listTeams, updateTeam } from "@/lib/data";
 import { EVENT_ID } from "@/lib/event";
-import type { Team } from "@/lib/types";
 import Link from "next/link";
+import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, login, errorMessage } from "@/lib/bt";
 
 export default function AdminTeams() {
   return (
@@ -28,7 +28,7 @@ function Page() {
   async function load() {
     setLoading(true);
     try {
-      setList(await listTeams());
+      setList(await judging().teams.list());
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -44,7 +44,7 @@ function Page() {
     setError("");
     try {
       // The server assigns the id and mints the login code.
-      const created = await apiCreateTeam({
+      const created = await judging().teams.create({
         name: form.name,
         members: form.members
           .split(",")
@@ -63,7 +63,7 @@ function Page() {
   async function saveTeam(t: Team) {
     setError("");
     try {
-      await updateTeam(t.id, {
+      await judging().team(t.id).update({
         name: t.name,
         members: t.members,
         github: t.github || undefined,
@@ -81,7 +81,7 @@ function Page() {
     if (!confirm(`Delete team "${t.name}"? This also deletes its reviews.`)) return;
     setError("");
     try {
-      await deleteTeam(t.id);
+      await judging().team(t.id).delete();
       await load();
     } catch (e) {
       setError(errorMessage(e));

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { errorMessage, getSettings, listJudges, listReviews, listTeams, patchSettings } from "@/lib/data";
-import type { Judge, Settings as EventSettings, Team } from "@/lib/types";
+import type { Judge, JudgingSettings as EventSettings, JudgingTeam as Team, Review } from "@ubc-biztech/sdk";
+import { judging, errorMessage, settingsOrDefaults, patchSettings } from "@/lib/bt";
 
 export default function FinalsAdminPage() {
   return (
@@ -39,9 +39,9 @@ function Page() {
       let sData: EventSettings;
       let ts: Team[];
       let jlist: Judge[];
-      let rs: Awaited<ReturnType<typeof listReviews>>;
+      let rs: Review[];
       try {
-        [sData, ts, jlist, rs] = await Promise.all([getSettings(), listTeams(), listJudges(), listReviews({ round: "prelim" })]);
+        [sData, ts, jlist, rs] = await Promise.all([settingsOrDefaults(), judging().teams.list(), judging().judges.list(), judging().reviews.list({ round: "prelim" })]);
       } catch (e) {
         setError(errorMessage(e));
         return;

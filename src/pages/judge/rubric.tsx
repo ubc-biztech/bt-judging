@@ -3,12 +3,12 @@
 import { useMemo } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { getRubric } from "@/lib/data";
 import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
+import { judging, orNull } from "@/lib/bt";
 
 function Page() {
-  const { data: serverRubric, loading } = usePoll(getRubric, []);
+  const { data: serverRubric, loading } = usePoll(() => orNull(judging().rubric.get()), []);
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]

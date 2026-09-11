@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Criterion } from "@/lib/types";
+import type { Criterion } from "@/lib/types";
 import {
   criterionMax,
   rubricTotalMax,

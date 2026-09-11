@@ -29,8 +29,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useClientSession, clearSession, type Session } from "@/lib/session";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
-import { getSettings } from "@/lib/data";
 import { usePoll } from "@/lib/usePoll";
+import { settingsOrDefaults } from "@/lib/bt";
 
 type Role = Session["role"] | "guest";
 
@@ -239,7 +239,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { ready, session } = useClientSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Public read; polled so a phase change by an organizer shows up in every open tab.
-  const { data: settings } = usePoll(getSettings, [], 15000);
+  const { data: settings } = usePoll(settingsOrDefaults, [], 15000);
   const eventName = settings?.eventName?.trim() || DEFAULT_EVENT_NAME;
   const phase = settings?.phase ?? "";
   const showTeamFeedback = settings?.showTeamFeedback !== false;

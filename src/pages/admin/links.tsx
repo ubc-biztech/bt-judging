@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { createLink, deleteLink, errorMessage, listLinks } from "@/lib/data";
-import type { Link } from "@/lib/types";
+import type { JudgingLink as Link } from "@ubc-biztech/sdk";
+import { judging, errorMessage } from "@/lib/bt";
 
 export default function LinksPage() {
   return (
@@ -23,7 +23,7 @@ function Page() {
 
   async function load() {
     try {
-      setLinks(await listLinks());
+      setLinks(await judging().links.list());
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -36,7 +36,7 @@ function Page() {
   async function addLink() {
     if (!form.label || !form.url) return alert("Label and URL required.");
     try {
-      await createLink(form.label, form.url, form.order === "" ? undefined : Number(form.order));
+      await judging().links.create({ label: form.label, url: form.url, order: form.order === "" ? undefined : Number(form.order) });
       setForm({ ...form, url: "", order: "" });
       setError(null);
     } catch (e) {
@@ -47,7 +47,7 @@ function Page() {
 
   async function removeLink(id: string) {
     try {
-      await deleteLink(id);
+      await judging().link(id).delete();
       setLinks((prev) => prev.filter((x) => x.id !== id));
     } catch (e) {
       setError(errorMessage(e));

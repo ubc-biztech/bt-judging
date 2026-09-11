@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Team } from "@/lib/types";
+import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
 
 export default function TeamCard({
   team,

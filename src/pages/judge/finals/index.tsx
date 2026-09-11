@@ -5,10 +5,10 @@ import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useClientSession } from "@/lib/session";
-import { getSettings, listReviews, listTeams } from "@/lib/data";
 import { usePoll } from "@/lib/usePoll";
-import { Team } from "@/lib/types";
 import Link from "next/link";
+import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, settingsOrDefaults } from "@/lib/bt";
 
 export default function JudgeFinalsIndex() {
   return (
@@ -25,11 +25,11 @@ function Page() {
   const { ready, session } = useClientSession();
   const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const { data: settings } = usePoll(ready && judgeId ? getSettings : null, [ready, judgeId]);
-  const { data: teamList } = usePoll(ready && judgeId ? listTeams : null, [ready, judgeId]);
+  const { data: settings } = usePoll(ready && judgeId ? settingsOrDefaults : null, [ready, judgeId]);
+  const { data: teamList } = usePoll(ready && judgeId ? () => judging().teams.list() : null, [ready, judgeId]);
 
   const fetchMyFinals = useCallback(
-    () => listReviews({ judgeId: judgeId as string, round: "finals" }),
+    () => judging().reviews.list({ judgeId: judgeId as string, round: "finals" }),
     [judgeId]
   );
   const { data: myFinals } = usePoll(ready && judgeId ? fetchMyFinals : null, [ready, judgeId]);

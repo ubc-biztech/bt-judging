@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { errorMessage, getRubric, setRubric as saveRubric } from "@/lib/data";
 import {
   normalizeRubric
 } from "@/lib/judging";
-import { Criterion, Rubric } from "@/lib/types";
+import type { JudgingRubricSetInput as Rubric } from "@ubc-biztech/sdk";
+import type { Criterion } from "@/lib/types";
+import { judging, orNull, errorMessage } from "@/lib/bt";
 
 export default function RubricPage() {
   return (
@@ -27,7 +28,7 @@ function Page() {
   useEffect(() => {
     (async () => {
       try {
-        const existing = await getRubric();
+        const existing = await orNull(judging().rubric.get());
         setRubric(existing ? normalizeRubric(existing) : normalizeRubric());
       } catch (e) {
         setError(errorMessage(e));
@@ -68,7 +69,7 @@ function Page() {
     setError(null);
     const normalized = normalizeRubric(rubric);
     try {
-      const saved = await saveRubric(normalized);
+      const saved = await judging().rubric.set(normalized);
       setRubric(normalizeRubric(saved));
       alert("Rubric saved");
     } catch (e) {

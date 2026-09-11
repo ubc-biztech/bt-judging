@@ -4,19 +4,12 @@ import { useRouter } from "next/router";
 import { useCallback, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import {
-  errorMessage,
-  getRubric,
-  getSettings,
-  getTeam,
-  listReviews,
-  submitReview
-} from "@/lib/data";
 import { normalizeRubric } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 
 import RubricForm from "@/components/RubricForm";
+import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
 
 export default function JudgeTeamPage() {
   return (
@@ -36,12 +29,12 @@ function Page() {
   const [submitting, setSubmitting] = useState(false);
   const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const { data: settings } = usePoll(getSettings, []);
+  const { data: settings } = usePoll(settingsOrDefaults, []);
 
-  const fetchTeam = useCallback(() => getTeam(teamId), [teamId]);
+  const fetchTeam = useCallback(() => orNull(judging().team(teamId).get()), [teamId]);
   const { data: team } = usePoll(ready && teamId ? fetchTeam : null, [ready, teamId]);
 
-  const { data: serverRubric, loading: rubricLoading } = usePoll(getRubric, []);
+  const { data: serverRubric, loading: rubricLoading } = usePoll(() => orNull(judging().rubric.get()), []);
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]
@@ -49,7 +42,7 @@ function Page() {
 
   const fetchExisting = useCallback(
     async () =>
-      (await listReviews({ teamId, judgeId: judgeId as string, round: "prelim" }))[0] ?? null,
+      (await judging().reviews.list({ teamId, judgeId: judgeId as string, round: "prelim" }))[0] ?? null,
     [teamId, judgeId]
   );
   const { data: existing, refresh: refreshExisting } = usePoll(
@@ -76,7 +69,7 @@ function Page() {
     setSubmitting(true);
     try {
       // The server picks the round from the current phase and computes totals from the rubric.
-      await submitReview(team.id, scores, feedback);
+      await judging().reviews.submit({ teamId: team.id, scores: scores, feedback: feedback });
       alert("Submitted!");
       await refreshExisting();
     } catch (e) {

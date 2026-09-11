@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { errorMessage, getSettings, listJudges, listTeams, updateJudge } from "@/lib/data";
 import { EVENT_ID } from "@/lib/event";
-import type { Judge as ApiJudge, Team } from "@/lib/types";
+import type { Judge as ApiJudge, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, errorMessage, settingsOrDefaults } from "@/lib/bt";
 
 /** Capacity is a UI-only planning aid; the API does not store it. */
 type Judge = ApiJudge & { capacity?: number };
@@ -39,7 +39,7 @@ function Page() {
     (async () => {
       setLoading(true);
       try {
-        const [settings, js, ts] = await Promise.all([getSettings(), listJudges(), listTeams()]);
+        const [settings, js, ts] = await Promise.all([settingsOrDefaults(), judging().judges.list(), judging().teams.list()]);
         setRequiredPerTeam(Number(settings.perTeamJudges || 3));
         setJudges(js);
         setTeams(ts);
@@ -53,7 +53,7 @@ function Page() {
 
   async function saveAssignments(judgeId: string, assignedTeamIds: string[]) {
     try {
-      await updateJudge(judgeId, { assignedTeamIds });
+      await judging().judge(judgeId).update({ assignedTeamIds });
       setJudges((prev) => prev.map((x) => (x.id === judgeId ? { ...x, assignedTeamIds } : x)));
     } catch (e) {
       setError(errorMessage(e));

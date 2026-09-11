@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { createTeam, errorMessage, listTeams } from "@/lib/data";
-import type { Team } from "@/lib/types";
+import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { judging, login, errorMessage } from "@/lib/bt";
 
 const RAW_TEAMS: { name: string; members: string[] }[] = [];
 
@@ -42,7 +42,7 @@ function Page() {
     (async () => {
       setLoading(true);
       try {
-        setExisting(await listTeams());
+        setExisting(await judging().teams.list());
       } catch (e) {
         setResult(`Error loading existing teams: ${errorMessage(e)}`);
       } finally {
@@ -78,7 +78,7 @@ function Page() {
         const row = plan[i];
         setProgress(`Creating ${i + 1} of ${plan.length}: ${row.name}`);
         try {
-          const t = await createTeam({ name: row.name, members: row.members, imageUrls: [] });
+          const t = await judging().teams.create({ name: row.name, members: row.members, imageUrls: [] });
           out.push({ name: row.name, status: "created", detail: t.code ?? "(code hidden)" });
         } catch (e) {
           out.push({ name: row.name, status: "error", detail: errorMessage(e) });
@@ -87,7 +87,7 @@ function Page() {
       }
       const created = out.filter((r) => r.status === "created").length;
       setResult(`Created ${created} of ${plan.length} teams.${created < plan.length ? " See errors below." : ""}`);
-      setExisting(await listTeams());
+      setExisting(await judging().teams.list());
     } catch (e) {
       setResult(`Error: ${errorMessage(e)}`);
     } finally {

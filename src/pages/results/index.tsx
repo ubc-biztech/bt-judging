@@ -4,12 +4,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import Layout from "@/components/Layout";
-import { getRubric, getSettings, listReviews, listTeams } from "@/lib/data";
 import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
-import { Criterion, Review, Rubric, Team } from "@/lib/types";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
+import type { Review, JudgingRubricSetInput as Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import type { Criterion } from "@/lib/types";
+import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
 
 type Row = {
   teamId: string;
@@ -43,10 +44,10 @@ export default function Results() {
   }, [ready, session, router]);
 
   const active = ready && !!session && session.role !== "team";
-  const { data: settings } = usePoll(active ? getSettings : null, [active], 10000);
-  const { data: rubricRaw } = usePoll(active ? getRubric : null, [active], 15000);
-  const { data: teamList } = usePoll(active ? listTeams : null, [active], 10000);
-  const { data: reviewList } = usePoll(active ? () => listReviews() : null, [active]);
+  const { data: settings } = usePoll(active ? settingsOrDefaults : null, [active], 10000);
+  const { data: rubricRaw } = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active], 15000);
+  const { data: teamList } = usePoll(active ? () => judging().teams.list() : null, [active], 10000);
+  const { data: reviewList } = usePoll(active ? () => judging().reviews.list() : null, [active]);
 
   const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
   const rubric: Rubric | null = useMemo(() => (rubricRaw === null ? null : normalizeRubric(rubricRaw)), [rubricRaw]);

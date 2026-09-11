@@ -1,4 +1,5 @@
-import { Criterion, Rubric } from "@/lib/types";
+import type { JudgingRubricSetInput as Rubric } from "@ubc-biztech/sdk";
+import type { Criterion } from "@/lib/types";
 
 export const OFFICIAL_JUDGING_RUBRIC: Rubric = {
   name: "HelloHacks 2027 Judging Rubric",
