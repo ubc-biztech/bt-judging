@@ -362,7 +362,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className={["mt-6 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
         <div className="flex items-center gap-3">
-          <div className="asset-placeholder relative size-9 shrink-0 rounded-full" data-asset="bizbot" />
+          <img src="/avatar.svg" alt="" className="size-9 shrink-0 rounded-full" />
           <div>
             <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
               Signed In

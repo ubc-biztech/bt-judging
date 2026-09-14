@@ -20,7 +20,7 @@
   --placeholder: #ff00e5;
 }
 
-.paper { background: url("/paper.jpg") center top / 736px auto repeat; }
+.paper { background: url("/paper.jpg") center / cover no-repeat; }
 
 /* ─── Placeholders for assets that do not exist yet ─── */
 .asset-placeholder {
@@ -41,12 +41,12 @@
 
 /* ─── Surfaces ─── */
 .bg-\[\#050505\] { background-color: var(--paper); }
-.bg-\[\#050505\]\/92, .bg-\[\#0b0b0c\]\/94, .bg-\[\#0b0b0c\]\/96 { background-color: var(--surface); }
+.bg-\[\#050505\]\/92, .bg-\[\#0b0b0c\]\/94, .bg-\[\#0b0b0c\]\/96 { background-color: rgba(255, 255, 255, 0.72); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
 .bg-\[\#0c0c0d\], .bg-\[\#111214\], .bg-\[\#1a1a1b\], .bg-white\/\[0\.03\], .bg-white\/\[0\.02\] { background-color: var(--surface); }
 .bg-\[\#0b0b0c\], .bg-\[\#0b1221\]\/70, .bg-\[\#0c1324\]\/70, .bg-black\/20, .bg-black\/30, .bg-black\/40 { background-color: var(--surface-2); }
-.bg-black\/60 { background-color: rgba(0, 0, 0, 0.3); }
-.bg-\[rgba\(5\,5\,5\,0\.16\)\] { background-color: rgba(0, 0, 0, 0.2); }
-.bg-white\/5, .bg-white\/\[0\.04\], .bg-white\/\[0\.05\], .bg-white\/\[0\.06\] { background-color: rgba(0, 0, 0, 0.04); }
+.bg-black\/60 { background-color: rgba(0, 0, 0, 0.3); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.bg-\[rgba\(5\,5\,5\,0\.16\)\] { background-color: rgba(0, 0, 0, 0.2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.bg-white\/5, .bg-white\/\[0\.04\], .bg-white\/\[0\.05\], .bg-white\/\[0\.06\] { background-color: rgba(255, 255, 255, 0.55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .hover\:bg-white\/5:hover, .hover\:bg-white\/\[0\.03\]:hover, .hover\:bg-white\/\[0\.05\]:hover, .hover\:bg-white\/\[0\.08\]:hover, .hover\:bg-\[\#111a2f\]:hover { background-color: rgba(0, 0, 0, 0.06); }
 .focus\:bg-\[\#090909\]:focus { background-color: var(--surface); }
 .bg-cyan-300\/10 { background-color: rgba(43, 127, 255, 0.1); }
