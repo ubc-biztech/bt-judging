@@ -396,7 +396,6 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-h-dvh overflow-hidden bg-[#050505] text-slate-100">
       <div className="pointer-events-none absolute inset-0">
-        <div className="paper absolute inset-0" />
       </div>
 
       <Dialog
