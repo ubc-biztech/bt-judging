@@ -8,7 +8,7 @@ import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import Link from "next/link";
 import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, listReviews } from "@/lib/bt";
 
 export default function JudgeFinalsIndex() {
   return (
@@ -25,11 +25,12 @@ function Page() {
   const { ready, session } = useClientSession();
   const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const { data: settings } = usePoll(ready && judgeId ? settingsOrDefaults : null, [ready, judgeId]);
-  const { data: teamList } = usePoll(ready && judgeId ? () => judging().teams.list() : null, [ready, judgeId]);
+  const { data: doc } = usePoll(ready && judgeId ? eventOrEmpty : null, [ready, judgeId]);
+  const settings = doc?.settings ?? null;
+  const teamList = doc?.teams ?? null;
 
   const fetchMyFinals = useCallback(
-    () => judging().reviews.list({ judgeId: judgeId as string, round: "finals" }),
+    () => listReviews({ judgeId: judgeId as string, round: "finals" }),
     [judgeId]
   );
   const { data: myFinals } = usePoll(ready && judgeId ? fetchMyFinals : null, [ready, judgeId]);

@@ -5,7 +5,8 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { EVENT_ID } from "@/lib/event";
 import type { Judge as ApiJudge, JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, errorMessage, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, setJudges as saveJudges, errorMessage } from "@/lib/bt";
+import { autoAssign as balancedAssign } from "@/lib/assign";
 
 /** Capacity is a UI-only planning aid; the API does not store it. */
 type Judge = ApiJudge & { capacity?: number };
@@ -39,10 +40,10 @@ function Page() {
     (async () => {
       setLoading(true);
       try {
-        const [settings, js, ts] = await Promise.all([settingsOrDefaults(), judging().judges.list(), judging().teams.list()]);
-        setRequiredPerTeam(Number(settings.perTeamJudges || 3));
-        setJudges(js);
-        setTeams(ts);
+        const doc = await eventOrEmpty();
+        setRequiredPerTeam(doc.settings.perTeamJudges ?? 3);
+        setJudges(doc.judges);
+        setTeams(doc.teams);
       } catch (e) {
         setError(errorMessage(e));
       } finally {
@@ -51,10 +52,11 @@ function Page() {
     })();
   }, []);
 
-  async function saveAssignments(judgeId: string, assignedTeamIds: string[]) {
+  /** One whole-document write per change; the API stores assignments on the judges. */
+  async function saveAssignments(next: Record<string, string[]>) {
     try {
-      await judging().judge(judgeId).update({ assignedTeamIds });
-      setJudges((prev) => prev.map((x) => (x.id === judgeId ? { ...x, assignedTeamIds } : x)));
+      const saved = await saveJudges((js) => js.map((j) => (j.id && j.id in next ? { ...j, assignedTeamIds: next[j.id] } : j)));
+      setJudges((prev) => saved.judges.map((j) => ({ ...j, capacity: prev.find((x) => x.id === j.id)?.capacity })));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -62,9 +64,7 @@ function Page() {
 
   const filteredJudges = useMemo(() => {
     const s = filter.searchJudge.trim().toLowerCase();
-    return judges
-      .filter((j) => !j.isAdmin)
-      .filter((j) => (j.name || "").toLowerCase().includes(s));
+    return judges.filter((j) => (j.name || "").toLowerCase().includes(s));
   }, [judges, filter.searchJudge]);
 
   const filteredTeamsAll = useMemo(() => {
@@ -95,7 +95,7 @@ function Page() {
   async function toggleJudgeTeam(j: Judge, teamId: string) {
     const assigned = new Set(j.assignedTeamIds || []);
     assigned.has(teamId) ? assigned.delete(teamId) : assigned.add(teamId);
-    await saveAssignments(j.id, Array.from(assigned));
+    await saveAssignments({ [j.id]: Array.from(assigned) });
   }
 
   async function bulkAssignToJudge(judgeId: string) {
@@ -114,7 +114,7 @@ function Page() {
       current.add(t.id);
     }
 
-    await saveAssignments(j.id, Array.from(current));
+    await saveAssignments({ [j.id]: Array.from(current) });
   }
 
   function setCapacity(j: Judge, val: number) {
@@ -126,49 +126,14 @@ function Page() {
 
   async function clearAll() {
     if (!confirm("Clear all judge assignments?")) return;
-    await Promise.all(judges.map((j) => saveAssignments(j.id, [])));
+    await saveAssignments(Object.fromEntries(judges.map((j) => [j.id, []])));
   }
 
+  /** Balanced round-robin over the teams currently shown; replaces every judge's list. */
   async function autoAssign() {
-    const js = judges
-      .filter((j) => !j.isAdmin)
-      .map((j) => ({
-        ...j,
-        assigned: new Set(j.assignedTeamIds || []),
-        cap: Number(
-          j.capacity ??
-            Math.ceil(
-              (filteredTeamsAll.length * requiredPerTeam) /
-                Math.max(1, judges.length)
-            )
-        )
-      }));
-    js.forEach((j) => j.assigned.clear());
-    const orderTeams = [...filteredTeamsAll].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    const needForTeam = (tid: string) =>
-      requiredPerTeam -
-      js.reduce((s, j) => s + (j.assigned.has(tid) ? 1 : 0), 0);
-
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const t of orderTeams) {
-        while (needForTeam(t.id) > 0) {
-          const candidate = js
-            .filter((j) => j.assigned.size < j.cap && !j.assigned.has(t.id))
-            .sort(
-              (a, b) => b.cap - b.assigned.size - (a.cap - a.assigned.size)
-            )[0];
-          if (!candidate) break;
-          candidate.assigned.add(t.id);
-          changed = true;
-        }
-      }
-    }
-
-    await Promise.all(js.map((j) => saveAssignments(j.id, Array.from(j.assigned))));
+    const orderTeams = [...filteredTeamsAll].sort((a, b) => a.name.localeCompare(b.name));
+    const assigned = balancedAssign(judges, orderTeams, requiredPerTeam);
+    await saveAssignments(Object.fromEntries(assigned.map((j) => [j.id, j.assignedTeamIds ?? []])));
   }
 
   function covBadge(teamId: string) {

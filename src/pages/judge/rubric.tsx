@@ -5,10 +5,11 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
-import { judging, orNull } from "@/lib/bt";
+import { eventOrEmpty } from "@/lib/bt";
 
 function Page() {
-  const { data: serverRubric, loading } = usePoll(() => orNull(judging().rubric.get()), []);
+  const { data: doc, loading } = usePoll(eventOrEmpty, []);
+  const serverRubric = doc?.rubric ?? null;
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]

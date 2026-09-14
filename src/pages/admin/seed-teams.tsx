@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, login, errorMessage } from "@/lib/bt";
+import { eventOrEmpty, setTeams, errorMessage } from "@/lib/bt";
 
 const RAW_TEAMS: { name: string; members: string[] }[] = [];
 
@@ -42,7 +42,7 @@ function Page() {
     (async () => {
       setLoading(true);
       try {
-        setExisting(await judging().teams.list());
+        setExisting((await eventOrEmpty()).teams);
       } catch (e) {
         setResult(`Error loading existing teams: ${errorMessage(e)}`);
       } finally {
@@ -72,22 +72,26 @@ function Page() {
         setResult(`Dry run complete. ${plan.length} teams would be created (no writes).`);
         return;
       }
-      // No batch on the API: one create per row, reported per row. Server assigns id and code.
-      const out: ResultRow[] = [];
-      for (let i = 0; i < plan.length; i++) {
-        const row = plan[i];
-        setProgress(`Creating ${i + 1} of ${plan.length}: ${row.name}`);
-        try {
-          const t = await judging().teams.create({ name: row.name, members: row.members, imageUrls: [] });
-          out.push({ name: row.name, status: "created", detail: t.code ?? "(code hidden)" });
-        } catch (e) {
-          out.push({ name: row.name, status: "error", detail: errorMessage(e) });
-        }
-        setRows([...out]);
+      // The event is one document: append every new team and save once. The server assigns
+      // ids and mints codes, in the order given.
+      setProgress(`Creating ${plan.length} teams…`);
+      const before = new Set(existing.map((t) => t.id));
+      let out: ResultRow[];
+      try {
+        const doc = await setTeams((teams) => [...teams, ...plan.map((row) => ({ name: row.name, members: row.members, imageUrls: [] }))]);
+        const created = doc.teams.filter((t) => !before.has(t.id));
+        out = plan.map((row, i) => {
+          const t = created[i];
+          return t ? { name: row.name, status: "created", detail: t.code ?? "(code hidden)" } : { name: row.name, status: "error", detail: "Not in the saved document" };
+        });
+        setExisting(doc.teams);
+      } catch (e) {
+        const detail = errorMessage(e);
+        out = plan.map((row) => ({ name: row.name, status: "error", detail }));
       }
+      setRows(out);
       const created = out.filter((r) => r.status === "created").length;
       setResult(`Created ${created} of ${plan.length} teams.${created < plan.length ? " See errors below." : ""}`);
-      setExisting(await judging().teams.list());
     } catch (e) {
       setResult(`Error: ${errorMessage(e)}`);
     } finally {

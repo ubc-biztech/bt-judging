@@ -3,9 +3,9 @@
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import type { JudgingSettingsSetInput as Settings } from "@ubc-biztech/sdk";
+import type { JudgingSettings as Settings } from "@ubc-biztech/sdk";
 import type { Phase } from "@/lib/types";
-import { judging, errorMessage, settingsOrDefaults, DEFAULT_SETTINGS, PHASES } from "@/lib/bt";
+import { patchSettings, errorMessage, settingsOrDefaults, DEFAULT_SETTINGS, PHASES } from "@/lib/bt";
 
 const PHASE_LABELS: Record<Phase, string> = {
   submission: "Submission",
@@ -32,8 +32,7 @@ function Page() {
   useEffect(() => {
     (async () => {
       try {
-        const { updatedAt: _u, ...current } = await settingsOrDefaults();
-        setS(current);
+        setS(await settingsOrDefaults());
       } catch (e) {
         setError(errorMessage(e));
       }
@@ -44,8 +43,8 @@ function Page() {
   async function save() {
     setError(null);
     try {
-      const { updatedAt: _u, ...saved } = await judging().settings.set(s);
-      setS(saved);
+      const saved = await patchSettings(s);
+      setS(saved.settings);
       alert("Settings saved");
     } catch (e) {
       setError(errorMessage(e));
@@ -95,7 +94,7 @@ function Page() {
             type="number"
             min={1}
             className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.perTeamJudges || 1}
+            value={s.perTeamJudges ?? 3}
             onChange={(e) =>
               setS((v) => ({
                 ...v,
@@ -126,7 +125,7 @@ function Page() {
             type="number"
             min={1}
             className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.finalsTopN}
+            value={s.finalsTopN ?? 5}
             onChange={(e) =>
               setS((v) => ({
                 ...v,

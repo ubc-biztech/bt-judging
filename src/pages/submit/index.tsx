@@ -5,7 +5,7 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
-import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
+import { judging, errorMessage, eventOrEmpty } from "@/lib/bt";
 
 function Page() {
   const { ready, session } = useClientSession();
@@ -19,9 +19,10 @@ function Page() {
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   const teamId = session?.role === "team" ? session.id : undefined;
-  const { data: settings } = usePoll(ready ? settingsOrDefaults : null, [ready], 10000);
-  const teamPoll = usePoll(ready && teamId ? () => orNull(judging().team(teamId).get()) : null, [teamId], 15000);
-  const team = teamPoll.data ?? null;
+  // One document: settings and this team's entry, as the team code may see it.
+  const docPoll = usePoll(ready && teamId ? eventOrEmpty : null, [teamId], 10000);
+  const settings = docPoll.data?.settings ?? null;
+  const team = docPoll.data?.teams.find((t) => t.id === teamId) ?? null;
 
   // Seed the form once per team load, so polling does not clobber edits in progress.
   useEffect(() => {
@@ -58,7 +59,7 @@ function Page() {
         imageUrls,
       });
       setImageText(imageUrls.join("\n"));
-      await teamPoll.refresh();
+      await docPoll.refresh();
       alert("Submission saved!");
     } catch (e: unknown) {
       alert(errorMessage(e) || "Error saving.");

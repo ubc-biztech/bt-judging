@@ -27,10 +27,10 @@ import {
   UserGroupIcon,
   XMarkIcon
 } from "@heroicons/react/24/outline";
-import { useClientSession, clearSession, type Session } from "@/lib/session";
+import { useClientSession, type Session } from "@/lib/session";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
 import { usePoll } from "@/lib/usePoll";
-import { settingsOrDefaults } from "@/lib/bt";
+import { logout, settingsOrDefaults } from "@/lib/bt";
 
 type Role = Session["role"] | "guest";
 
@@ -229,7 +229,7 @@ function homeHrefForRole(role: Role) {
 
 function roleDisplayName(session: Session | null) {
   if (!session) return "Not signed in";
-  if (session.role === "admin") return session.name || "Admin";
+  if (session.role === "admin") return session.name || session.id || "Organizer";
   if (session.role === "judge") return session.name || "Judge";
   return session.name || "Team";
 }
@@ -238,8 +238,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, session } = useClientSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Public read; polled so a phase change by an organizer shows up in every open tab.
-  const { data: settings } = usePoll(settingsOrDefaults, [], 15000);
+  // Polled so a phase change by an organizer shows up in every open tab. Re-fetched when the
+  // session changes, because what settingsOrDefaults may read depends on who is signed in.
+  const { data: settings } = usePoll(settingsOrDefaults, [session?.role, session?.id], 15000);
   const eventName = settings?.eventName?.trim() || DEFAULT_EVENT_NAME;
   const phase = settings?.phase ?? "";
   const showTeamFeedback = settings?.showTeamFeedback !== false;
@@ -275,8 +276,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const pageTitle = activeItem?.name || eventName;
 
   function signOut() {
-    clearSession();
-    router.replace("/auth");
+    void logout().finally(() => router.replace("/auth"));
   }
 
   const accountLabel = useMemo(() => roleDisplayName(session), [session]);

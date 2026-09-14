@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { EVENT_ID } from "@/lib/event";
 import Link from "next/link";
 import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, login, errorMessage } from "@/lib/bt";
+import { eventOrEmpty, setTeams, errorMessage } from "@/lib/bt";
 
 export default function AdminTeams() {
   return (
@@ -28,7 +28,7 @@ function Page() {
   async function load() {
     setLoading(true);
     try {
-      setList(await judging().teams.list());
+      setList((await eventOrEmpty()).teams);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -43,18 +43,22 @@ function Page() {
     if (!form.name) return alert("Team name required");
     setError("");
     try {
-      // The server assigns the id and mints the login code.
-      const created = await judging().teams.create({
-        name: form.name,
-        members: form.members
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        imageUrls: []
-      });
-      setLastCreated(created);
+      // A team without an id is new: the server assigns the id and mints the login code.
+      const before = new Set(list.map((t) => t.id));
+      const doc = await setTeams((teams) => [
+        ...teams,
+        {
+          name: form.name,
+          members: form.members
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          imageUrls: []
+        }
+      ]);
+      setLastCreated(doc.teams.find((t) => !before.has(t.id)) ?? null);
       setForm({ name: "", members: "" });
-      await load();
+      setList(doc.teams);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -63,26 +67,34 @@ function Page() {
   async function saveTeam(t: Team) {
     setError("");
     try {
-      await judging().team(t.id).update({
-        name: t.name,
-        members: t.members,
-        github: t.github || undefined,
-        devpost: t.devpost || undefined,
-        description: t.description || undefined,
-        imageUrls: t.imageUrls || []
-      });
-      await load();
+      // Organizers edit teams by rewriting the event document; id and code are kept.
+      const doc = await setTeams((teams) =>
+        teams.map((x) =>
+          x.id === t.id
+            ? {
+                ...x,
+                name: t.name,
+                members: t.members,
+                github: t.github || undefined,
+                devpost: t.devpost || undefined,
+                description: t.description || undefined,
+                imageUrls: t.imageUrls || []
+              }
+            : x
+        )
+      );
+      setList(doc.teams);
     } catch (e) {
       setError(errorMessage(e));
     }
   }
 
   async function removeTeam(t: Team) {
-    if (!confirm(`Delete team "${t.name}"? This also deletes its reviews.`)) return;
+    if (!confirm(`Delete team "${t.name}"? Its reviews stay on the server but are no longer shown.`)) return;
     setError("");
     try {
-      await judging().team(t.id).delete();
-      await load();
+      const doc = await setTeams((teams) => teams.filter((x) => x.id !== t.id));
+      setList(doc.teams);
     } catch (e) {
       setError(errorMessage(e));
     }

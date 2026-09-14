@@ -8,7 +8,7 @@ import { normalizeRubric } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 import RubricForm from "@/components/RubricForm";
-import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
+import { judging, errorMessage, eventOrEmpty, listReviews } from "@/lib/bt";
 
 export default function JudgeFinalTeam() {
   return (
@@ -29,12 +29,11 @@ function Page() {
   const [submitting, setSubmitting] = useState(false);
   const active = ready && !!judgeId && !!teamId;
 
-  const { data: settings } = usePoll(active ? settingsOrDefaults : null, [active]);
-
-  const fetchTeam = useCallback(() => orNull(judging().team(teamId).get()), [teamId]);
-  const { data: team } = usePoll(active ? fetchTeam : null, [active, teamId]);
-
-  const { data: serverRubric, loading: rubricLoading } = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active]);
+  // One document: settings, rubric, and the team, as the judge code may see it.
+  const { data: doc, loading: rubricLoading } = usePoll(active ? eventOrEmpty : null, [active, teamId]);
+  const settings = doc?.settings ?? null;
+  const team = doc?.teams.find((t) => t.id === teamId) ?? null;
+  const serverRubric = doc?.rubric ?? null;
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]
@@ -42,7 +41,7 @@ function Page() {
 
   const fetchExisting = useCallback(
     async () =>
-      (await judging().reviews.list({ teamId, judgeId: judgeId as string, round: "finals" }))[0] ?? null,
+      (await listReviews({ teamId, judgeId: judgeId as string, round: "finals" }))[0] ?? null,
     [teamId, judgeId]
   );
   const { data: existing, refresh: refreshExisting } = usePoll(active ? fetchExisting : null, [active, teamId, judgeId]);
@@ -82,7 +81,7 @@ function Page() {
     setSubmitting(true);
     try {
       // Phase is "finals" here, so the server files this as a finals review and computes totals.
-      await judging().reviews.submit({ teamId: team.id, scores: scores, feedback: feedback });
+      await judging().team(team.id).review({ scores, feedback });
       alert("Finals review submitted!");
       await refreshExisting();
     } catch (e) {

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import type { Judge, JudgingSettings as EventSettings, JudgingTeam as Team, Review } from "@ubc-biztech/sdk";
-import { judging, errorMessage, settingsOrDefaults, patchSettings } from "@/lib/bt";
+import { eventOrEmpty, listReviews, errorMessage, patchSettings } from "@/lib/bt";
 
 export default function FinalsAdminPage() {
   return (
@@ -41,7 +41,8 @@ function Page() {
       let jlist: Judge[];
       let rs: Review[];
       try {
-        [sData, ts, jlist, rs] = await Promise.all([settingsOrDefaults(), judging().teams.list(), judging().judges.list(), judging().reviews.list({ round: "prelim" })]);
+        const [doc, prelimReviews] = await Promise.all([eventOrEmpty(), listReviews({ round: "prelim" })]);
+        [sData, ts, jlist, rs] = [doc.settings, doc.teams, doc.judges, prelimReviews];
       } catch (e) {
         setError(errorMessage(e));
         return;
@@ -141,7 +142,7 @@ function Page() {
         finalsTeamIds: Array.from(selectedFinalsTeams),
         finalsJudgeIds: Array.from(selectedFinalsJudges)
       });
-      setSettings(saved);
+      setSettings(saved.settings);
       setNotice("Finals setup saved.");
     } catch (e: unknown) {
       setError(errorMessage(e));
@@ -169,7 +170,7 @@ function Page() {
         finalsTeamIds: Array.from(selectedFinalsTeams),
         finalsJudgeIds: Array.from(selectedFinalsJudges)
       });
-      setSettings(saved);
+      setSettings(saved.settings);
       setNotice("Finals started.");
     } catch (e: unknown) {
       setError(errorMessage(e));
@@ -183,7 +184,7 @@ function Page() {
     setNotice("");
     setBusy(true);
     try {
-      setSettings(await patchSettings({ phase: "prelim" }));
+      setSettings((await patchSettings({ phase: "prelim" })).settings);
       setNotice("Switched to prelim.");
     } catch (e: unknown) {
       setError(errorMessage(e));
@@ -285,11 +286,6 @@ function Page() {
                 onChange={() => toggleJudge(j.id)}
               />
               <span className="font-medium">{j.name || j.id}</span>
-              {j.isAdmin ? (
-                <span className="ml-2 rounded bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 dark:bg-white/5 dark:text-gray-300">
-                  Admin
-                </span>
-              ) : null}
             </label>
           ))}
         </div>

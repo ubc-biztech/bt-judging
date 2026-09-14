@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { OFFICIAL_JUDGING_RUBRIC } from "@/lib/judging";
-import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, listReviews } from "@/lib/bt";
 
 type Snapshot = {
   eventName: string;
@@ -47,22 +47,16 @@ function AdminHome() {
 
   useEffect(() => {
     (async () => {
-      const [settings, rubric, teams, judges, reviews] = await Promise.all([
-        settingsOrDefaults(),
-        orNull(judging().rubric.get()),
-        judging().teams.list(),
-        judging().judges.list(),
-        judging().reviews.list({ round: "prelim" })
-      ]);
+      const [doc, reviews] = await Promise.all([eventOrEmpty(), listReviews({ round: "prelim" })]);
+      const { settings, rubric, teams, judges } = doc;
 
       const rubricCriteriaCount =
         rubric?.criteria.length || OFFICIAL_JUDGING_RUBRIC.criteria.length;
-      const requiredJudgeCount = settings.perTeamJudges;
+      const requiredJudgeCount = settings.perTeamJudges ?? 3;
 
       const coverage: Record<string, number> = {};
       for (const judge of judges) {
-        if (judge.isAdmin) continue;
-        for (const teamId of judge.assignedTeamIds) {
+        for (const teamId of judge.assignedTeamIds ?? []) {
           coverage[teamId] = (coverage[teamId] || 0) + 1;
         }
       }
@@ -80,7 +74,7 @@ function AdminHome() {
         phase: settings.phase,
         requiredJudgeCount,
         teams: teams.length,
-        judges: judges.filter((j) => !j.isAdmin).length,
+        judges: judges.length,
         rubricCriteria: rubricCriteriaCount,
         prelimReviews: reviews.length,
         assignedTeams,

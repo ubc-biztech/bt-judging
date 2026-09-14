@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import type { Judge, JudgingLink as ExtLink, Review, JudgingSettings as Settings, JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, orNull, errorMessage, settingsOrDefaults, patchSettings } from "@/lib/bt";
+import { eventOrEmpty, listReviews, errorMessage, patchSettings, setTeams as saveTeams, setJudges as saveJudges, setLinks as saveLinks, newLinkId } from "@/lib/bt";
 
 export default function AdminTeamDetail() {
   return (
@@ -46,13 +46,12 @@ function Page() {
     (async () => {
       setLoading(true);
       try {
-        const [sData, t, js, rs, ls] = await Promise.all([
-          settingsOrDefaults(),
-          orNull(judging().team(teamId).get()),
-          judging().judges.list(),
-          judging().reviews.list({ teamId }),
-          judging().links.list()
-        ]);
+        // Organizers read the whole event document (settings, teams, judges, links) in one call.
+        const [doc, rs] = await Promise.all([eventOrEmpty(), listReviews({ teamId })]);
+        const sData = doc.settings;
+        const t = doc.teams.find((x) => x.id === teamId) ?? null;
+        const js = doc.judges;
+        const ls = doc.links;
         setSettings(sData);
         setFinalsSelected((sData.finalsTeamIds || []).includes(teamId));
         if (t) {
@@ -70,7 +69,7 @@ function Page() {
     })();
   }, [teamId]);
 
-  /** The editable fields, as `updateTeam` wants them (a full replace). */
+  /** The editable fields; the team's id and code are kept by spreading the stored team first. */
   function editable(t: Team) {
     return {
       name: t.name,
@@ -109,7 +108,7 @@ function Page() {
     if (!edit) return;
     setSaving(true);
     try {
-      const saved = await judging().team(edit.id).update(editable(edit));
+      const saved = await saveTeamFields(edit.id, editable(edit));
       setTeam(saved);
       setEdit(saved);
       alert("Saved.");
@@ -129,7 +128,7 @@ function Page() {
     try {
       const saved = await patchSettings({ finalsTeamIds: Array.from(next) });
       setFinalsSelected(next.has(team.id));
-      setSettings(saved);
+      setSettings(saved.settings);
     } catch (e) {
       alert(errorMessage(e));
     }
@@ -143,9 +142,12 @@ function Page() {
     if (!confirmed) return;
 
     try {
-      const saved = await judging().team(team.id).update({
+      const saved = await saveTeamFields(team.id, {
         name: team.name,
         members: team.members || [],
+        github: undefined,
+        devpost: undefined,
+        description: undefined,
         imageUrls: []
       });
       setTeam(saved);
@@ -159,7 +161,7 @@ function Page() {
   async function setImageUrls(urls: string[]) {
     if (!team) return;
     try {
-      const saved = await judging().team(team.id).update({ ...editable(team), imageUrls: urls });
+      const saved = await saveTeamFields(team.id, { ...editable(team), imageUrls: urls });
       setTeam(saved);
       setEdit((e) => (e ? { ...e, imageUrls: saved.imageUrls } : e));
     } catch (e) {
@@ -185,11 +187,19 @@ function Page() {
     if (assigned) next.add(teamId);
     else next.delete(teamId);
     try {
-      const saved = await judging().judge(judgeId).update({ assignedTeamIds: Array.from(next) });
-      setJudges((prev) => prev.map((x) => (x.id === judgeId ? saved : x)));
+      const doc = await saveJudges((js) => js.map((x) => (x.id === judgeId ? { ...x, assignedTeamIds: Array.from(next) } : x)));
+      setJudges(doc.judges);
     } catch (e) {
       alert(errorMessage(e));
     }
+  }
+
+  /** Organizers edit a team by rewriting it inside the event document; returns the stored team. */
+  async function saveTeamFields(id: string, fields: ReturnType<typeof editable>): Promise<Team> {
+    const doc = await saveTeams((teams) => teams.map((x) => (x.id === id ? { ...x, ...fields } : x)));
+    const saved = doc.teams.find((x) => x.id === id);
+    if (!saved) throw new Error("The team is no longer in the event.");
+    return saved;
   }
 
   const assignJudge = (judgeId: string) => setAssignment(judgeId, true);
@@ -200,8 +210,8 @@ function Page() {
     const url = newLink.url.trim();
     if (!title || !url) return alert("Title and URL required.");
     try {
-      const created = await judging().links.create({ label: title, url: url });
-      setLinks((l) => [...l, created]);
+      const doc = await saveLinks((ls) => [...ls, { id: newLinkId(), label: title, url }]);
+      setLinks(doc.links);
       setNewLink({ title: "", url: "" });
     } catch (e) {
       alert(errorMessage(e));
@@ -210,8 +220,8 @@ function Page() {
 
   async function removeExternalLink(id: string) {
     try {
-      await judging().link(id).delete();
-      setLinks((l) => l.filter((x) => x.id !== id));
+      const doc = await saveLinks((ls) => ls.filter((x) => x.id !== id));
+      setLinks(doc.links);
     } catch (e) {
       alert(errorMessage(e));
     }
@@ -253,9 +263,6 @@ function Page() {
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             ID: <span className="font-mono">{team.id}</span>
-            {team.createdAt ? (
-              <> • Created: {new Date(team.createdAt).toLocaleString()}</>
-            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

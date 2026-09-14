@@ -8,9 +8,9 @@ import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
-import type { Review, JudgingRubricSetInput as Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
-import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, listReviews } from "@/lib/bt";
 
 type Row = {
   teamId: string;
@@ -44,10 +44,12 @@ export default function Results() {
   }, [ready, session, router]);
 
   const active = ready && !!session && session.role !== "team";
-  const { data: settings } = usePoll(active ? settingsOrDefaults : null, [active], 10000);
-  const { data: rubricRaw } = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active], 15000);
-  const { data: teamList } = usePoll(active ? () => judging().teams.list() : null, [active], 10000);
-  const { data: reviewList } = usePoll(active ? () => judging().reviews.list() : null, [active]);
+  // One document (settings, rubric, teams) plus the reviews this role may see.
+  const { data: doc } = usePoll(active ? eventOrEmpty : null, [active, session?.role], 10000);
+  const settings = doc?.settings ?? null;
+  const rubricRaw = doc?.rubric ?? null;
+  const teamList = doc?.teams ?? null;
+  const { data: reviewList } = usePoll(active ? () => listReviews() : null, [active, session?.role]);
 
   const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
   const rubric: Rubric | null = useMemo(() => (rubricRaw === null ? null : normalizeRubric(rubricRaw)), [rubricRaw]);

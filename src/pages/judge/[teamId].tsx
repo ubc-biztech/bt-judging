@@ -9,7 +9,7 @@ import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 
 import RubricForm from "@/components/RubricForm";
-import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
+import { judging, errorMessage, eventOrEmpty, listReviews } from "@/lib/bt";
 
 export default function JudgeTeamPage() {
   return (
@@ -29,12 +29,11 @@ function Page() {
   const [submitting, setSubmitting] = useState(false);
   const judgeId = ready && session?.role === "judge" ? session.id : null;
 
-  const { data: settings } = usePoll(settingsOrDefaults, []);
-
-  const fetchTeam = useCallback(() => orNull(judging().team(teamId).get()), [teamId]);
-  const { data: team } = usePoll(ready && teamId ? fetchTeam : null, [ready, teamId]);
-
-  const { data: serverRubric, loading: rubricLoading } = usePoll(() => orNull(judging().rubric.get()), []);
+  // One document: settings, rubric, and the team, as the judge code may see it.
+  const { data: doc, loading: rubricLoading } = usePoll(ready && teamId ? eventOrEmpty : null, [ready, teamId]);
+  const settings = doc?.settings ?? null;
+  const team = doc?.teams.find((t) => t.id === teamId) ?? null;
+  const serverRubric = doc?.rubric ?? null;
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
     [serverRubric]
@@ -42,7 +41,7 @@ function Page() {
 
   const fetchExisting = useCallback(
     async () =>
-      (await judging().reviews.list({ teamId, judgeId: judgeId as string, round: "prelim" }))[0] ?? null,
+      (await listReviews({ teamId, judgeId: judgeId as string, round: "prelim" }))[0] ?? null,
     [teamId, judgeId]
   );
   const { data: existing, refresh: refreshExisting } = usePoll(
@@ -69,7 +68,7 @@ function Page() {
     setSubmitting(true);
     try {
       // The server picks the round from the current phase and computes totals from the rubric.
-      await judging().reviews.submit({ teamId: team.id, scores: scores, feedback: feedback });
+      await judging().team(team.id).review({ scores, feedback });
       alert("Submitted!");
       await refreshExisting();
     } catch (e) {

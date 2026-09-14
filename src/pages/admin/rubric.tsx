@@ -6,9 +6,9 @@ import RoleGate from "@/components/RoleGate";
 import {
   normalizeRubric
 } from "@/lib/judging";
-import type { JudgingRubricSetInput as Rubric } from "@ubc-biztech/sdk";
+import type { Rubric } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
-import { judging, orNull, errorMessage } from "@/lib/bt";
+import { loadEvent, setRubric as saveRubric, errorMessage } from "@/lib/bt";
 
 export default function RubricPage() {
   return (
@@ -28,7 +28,7 @@ function Page() {
   useEffect(() => {
     (async () => {
       try {
-        const existing = await orNull(judging().rubric.get());
+        const existing = (await loadEvent())?.rubric ?? null;
         setRubric(existing ? normalizeRubric(existing) : normalizeRubric());
       } catch (e) {
         setError(errorMessage(e));
@@ -69,8 +69,8 @@ function Page() {
     setError(null);
     const normalized = normalizeRubric(rubric);
     try {
-      const saved = await judging().rubric.set(normalized);
-      setRubric(normalizeRubric(saved));
+      const saved = await saveRubric(normalized);
+      setRubric(normalizeRubric(saved.rubric));
       alert("Rubric saved");
     } catch (e) {
       setError(errorMessage(e));

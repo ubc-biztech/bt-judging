@@ -1,4 +1,4 @@
-import type { JudgingRubricSetInput as Rubric } from "@ubc-biztech/sdk";
+import type { Rubric } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
 
 export const OFFICIAL_JUDGING_RUBRIC: Rubric = {

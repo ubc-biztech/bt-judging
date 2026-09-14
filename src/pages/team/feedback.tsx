@@ -8,9 +8,9 @@ import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
-import type { Review, JudgingRubricSetInput as Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
-import { judging, orNull, errorMessage, settingsOrDefaults } from "@/lib/bt";
+import { errorMessage, eventOrEmpty, listReviews } from "@/lib/bt";
 
 export default function TeamFeedbackPage() {
   return (
@@ -29,17 +29,17 @@ function Page() {
   const teamId = session?.role === "team" ? session.id : undefined;
   const active = ready && !!teamId;
 
-  const settingsPoll = usePoll(active ? settingsOrDefaults : null, [active], 10000);
-  const teamPoll = usePoll(active ? () => orNull(judging().team(teamId!).get()) : null, [teamId], 15000);
-  const rubricPoll = usePoll(active ? () => orNull(judging().rubric.get()) : null, [active], 15000);
+  // One document: settings, rubric, and this team, as the team code may see it.
+  const docPoll = usePoll(active ? eventOrEmpty : null, [teamId], 10000);
   // The server refuses (403) until results are public; treat that as "not yet", not an error.
-  const reviewsPoll = usePoll(active ? () => judging().reviews.list({ teamId: teamId! }) : null, [teamId]);
+  const reviewsPoll = usePoll(active ? () => listReviews({ teamId: teamId! }) : null, [teamId]);
 
-  const canViewFeedback = settingsPoll.data?.showTeamFeedback !== false && !reviewsPoll.error;
+  const canViewFeedback = docPoll.data?.settings.showTeamFeedback !== false && !reviewsPoll.error;
   const reviewsError = reviewsPoll.error ? errorMessage(reviewsPoll.error) : "";
-  const loading = !ready || (active && (settingsPoll.loading || teamPoll.loading || rubricPoll.loading || reviewsPoll.loading));
-  const team: Team | null = canViewFeedback ? (teamPoll.data ?? null) : null;
-  const rubric: Rubric | null = useMemo(() => (rubricPoll.data === null ? null : normalizeRubric(rubricPoll.data)), [rubricPoll.data]);
+  const loading = !ready || (active && (docPoll.loading || reviewsPoll.loading));
+  const team: Team | null = canViewFeedback ? (docPoll.data?.teams.find((t) => t.id === teamId) ?? null) : null;
+  const rubricRaw = docPoll.data?.rubric ?? null;
+  const rubric: Rubric | null = useMemo(() => (rubricRaw === null ? null : normalizeRubric(rubricRaw)), [rubricRaw]);
   const reviews: Review[] = useMemo(() => (canViewFeedback ? (reviewsPoll.data ?? []) : []), [canViewFeedback, reviewsPoll.data]);
 
   const prelimReviews = useMemo(

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import type { JudgingLink as Link } from "@ubc-biztech/sdk";
-import { judging, errorMessage } from "@/lib/bt";
+import { eventOrEmpty, setLinks as saveLinks, newLinkId, errorMessage } from "@/lib/bt";
 
 export default function LinksPage() {
   return (
@@ -18,12 +18,12 @@ export default function LinksPage() {
 
 function Page() {
   const [links, setLinks] = useState<Link[]>([]);
-  const [form, setForm] = useState({ label: "Schedule", url: "", order: "" });
+  const [form, setForm] = useState({ label: "Schedule", url: "" });
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      setLinks(await judging().links.list());
+      setLinks((await eventOrEmpty()).links);
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -36,19 +36,19 @@ function Page() {
   async function addLink() {
     if (!form.label || !form.url) return alert("Label and URL required.");
     try {
-      await judging().links.create({ label: form.label, url: form.url, order: form.order === "" ? undefined : Number(form.order) });
-      setForm({ ...form, url: "", order: "" });
+      const saved = await saveLinks((ls) => [...ls, { id: newLinkId(), label: form.label, url: form.url }]);
+      setLinks(saved.links);
+      setForm({ ...form, url: "" });
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
     }
-    await load();
   }
 
   async function removeLink(id: string) {
     try {
-      await judging().link(id).delete();
-      setLinks((prev) => prev.filter((x) => x.id !== id));
+      const saved = await saveLinks((ls) => ls.filter((x) => x.id !== id));
+      setLinks(saved.links);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -61,19 +61,12 @@ function Page() {
         Event-wide links shown on the home page (schedule, Discord, rules). Team links live on each team.
       </p>
 
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <input
           value={form.label}
           onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
           className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
           placeholder="Label (Schedule, Discord, …)"
-        />
-        <input
-          type="number"
-          value={form.order}
-          onChange={(e) => setForm((f) => ({ ...f, order: e.target.value }))}
-          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-          placeholder="Order (optional)"
         />
         <input
           value={form.url}
@@ -101,12 +94,12 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {links.map((l) => (
+            {links.map((l, i) => (
               <tr
                 key={l.id}
                 className="border-t border-gray-100 dark:border-white/10"
               >
-                <td className="px-4 py-2">{l.order}</td>
+                <td className="px-4 py-2">{i + 1}</td>
                 <td className="px-4 py-2">{l.label}</td>
                 <td className="px-4 py-2">
                   <a

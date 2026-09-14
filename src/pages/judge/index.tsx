@@ -7,7 +7,7 @@ import TeamCard from "@/components/TeamCard";
 import { usePoll } from "@/lib/usePoll";
 import { useClientSession } from "@/lib/session";
 import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { judging, orNull, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, listReviews } from "@/lib/bt";
 
 function Page() {
   const { ready, session } = useClientSession();
@@ -15,14 +15,14 @@ function Page() {
   const judgeName =
     ready && session?.role === "judge" ? session.name || "Judge" : "Judge";
 
-  const { data: settings } = usePoll(settingsOrDefaults, []);
-  const { data: teamList } = usePoll(() => judging().teams.list(), []);
-
-  const fetchJudge = useCallback(() => orNull(judging().judge(judgeId as string).get()), [judgeId]);
-  const { data: judge } = usePoll(judgeId ? fetchJudge : null, [judgeId]);
+  // One document: settings, teams, and this judge's assignments.
+  const { data: doc } = usePoll(judgeId ? eventOrEmpty : null, [judgeId]);
+  const settings = doc?.settings ?? null;
+  const teamList = doc?.teams ?? null;
+  const judge = doc?.judges.find((j) => j.id === judgeId) ?? null;
 
   const fetchMyReviews = useCallback(
-    () => judging().reviews.list({ judgeId: judgeId as string, round: "prelim" }),
+    () => listReviews({ judgeId: judgeId as string, round: "prelim" }),
     [judgeId]
   );
   const { data: myReviews } = usePoll(judgeId ? fetchMyReviews : null, [judgeId]);

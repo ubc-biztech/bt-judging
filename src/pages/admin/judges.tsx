@@ -6,7 +6,7 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
 import type { Judge } from "@ubc-biztech/sdk";
-import { judging, errorMessage } from "@/lib/bt";
+import { eventOrEmpty, setJudges, errorMessage } from "@/lib/bt";
 
 function AdminJudgesInner() {
   return (
@@ -22,14 +22,14 @@ function Page() {
   const [list, setList] = useState<Judge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newJ, setNewJ] = useState({ name: "", isAdmin: false });
+  const [newJ, setNewJ] = useState({ name: "" });
   // The most recently created judge: its code is shown once, prominently, so it can be handed over.
   const [created, setCreated] = useState<Judge | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      setList(await judging().judges.list());
+      setList((await eventOrEmpty()).judges);
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -53,23 +53,24 @@ function Page() {
   async function createJudge() {
     if (!newJ.name) return alert("Name required");
     await run(async () => {
-      const j = await judging().judges.create({ name: newJ.name, isAdmin: newJ.isAdmin });
-      setCreated(j);
-      setNewJ({ name: "", isAdmin: false });
+      const before = new Set(list.map((x) => x.id));
+      const saved = await setJudges((js) => [...js, { name: newJ.name, assignedTeamIds: [] }]);
+      setCreated(saved.judges.find((x) => !before.has(x.id)) ?? null);
+      setNewJ({ name: "" });
     });
   }
 
   async function saveJudge(j: Judge) {
-    await run(() => judging().judge(j.id).update({ name: j.name, isAdmin: j.isAdmin }));
+    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, name: j.name } : x))));
   }
 
   async function resetAssignments(j: Judge) {
-    await run(() => judging().judge(j.id).update({ assignedTeamIds: [] }));
+    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, assignedTeamIds: [] } : x))));
   }
 
   async function removeJudge(j: Judge) {
     if (!confirm(`Delete judge "${j.name}"?`)) return;
-    await run(() => judging().judge(j.id).delete());
+    await run(() => setJudges((js) => js.filter((x) => x.id !== j.id)));
   }
 
   return (
@@ -92,15 +93,6 @@ function Page() {
             value={newJ.name}
             onChange={(e) => setNewJ({ ...newJ, name: e.target.value })}
           />
-          <label className="inline-flex h-11 shrink-0 items-center gap-3 rounded-lg border border-white/10 bg-[#0f1012] px-4 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={newJ.isAdmin}
-              onChange={(e) => setNewJ({ ...newJ, isAdmin: e.target.checked })}
-              className="size-4 rounded border-white/20 bg-transparent text-white"
-            />
-            Admin
-          </label>
           <button
             onClick={createJudge}
             className="h-11 shrink-0 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-slate-200"
@@ -133,7 +125,6 @@ function Page() {
             <tr>
               <th className="px-4 py-2 text-left">Name</th>
               <th className="px-4 py-2 text-left">Code</th>
-              <th className="px-4 py-2 text-left">Admin</th>
               <th className="px-4 py-2 text-left">Assigned</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -141,7 +132,7 @@ function Page() {
           <tbody>
             {loading && (
               <tr>
-                <td className="px-4 py-4" colSpan={5}>
+                <td className="px-4 py-4" colSpan={4}>
                   Loading…
                 </td>
               </tr>
@@ -160,7 +151,7 @@ function Page() {
               <tr>
                 <td
                   className="px-4 py-4 text-gray-500 dark:text-gray-400"
-                  colSpan={5}
+                  colSpan={4}
                 >
                   No judges yet.
                 </td>
@@ -197,14 +188,7 @@ function Row({
       <td className="px-4 py-2">
         <span className="font-mono text-sm tracking-wider">{j.code ?? "••••"}</span>
       </td>
-      <td className="px-4 py-2">
-        <input
-          type="checkbox"
-          checked={edit.isAdmin}
-          onChange={(e) => setEdit({ ...edit, isAdmin: e.target.checked })}
-        />
-      </td>
-      <td className="px-4 py-2">{edit.assignedTeamIds.length}</td>
+      <td className="px-4 py-2">{edit.assignedTeamIds?.length ?? 0}</td>
       <td className="px-4 py-2">
         <div className="flex flex-wrap gap-2">
           <button
