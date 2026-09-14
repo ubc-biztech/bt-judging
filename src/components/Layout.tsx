@@ -295,6 +295,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           className="inline-flex items-center"
         >
           <div>
+            <div className="asset-placeholder relative mb-2 h-10 w-28 rounded-md" data-asset="hello hacks logo" />
             <p className="text-base font-semibold tracking-tight text-white">{eventName}</p>
             <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
               Judging Portal
@@ -360,7 +361,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <div className={["mt-6 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <div className="asset-placeholder relative size-9 shrink-0 rounded-full" data-asset="bizbot" />
           <div>
             <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
               Signed In
@@ -394,7 +396,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-h-dvh overflow-hidden bg-[#050505] text-slate-100">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-x-0 top-0 h-40 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),transparent)]" />
+        <div className="asset-placeholder absolute inset-0" data-asset="papery background" />
       </div>
 
       <Dialog

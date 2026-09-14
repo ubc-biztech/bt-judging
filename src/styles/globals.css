@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import "./theme-macos.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
@@ -12,14 +13,12 @@ body,
 }
 
 body {
-  font-family: "Avenir Next", "Nunito Sans", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(72rem 48rem at 50% -18%, rgba(255, 255, 255, 0.035), transparent 58%),
-    linear-gradient(180deg, #050505 0%, #080808 42%, #0a0a0a 100%);
-  color: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Inter", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
 }
 
 ::selection {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fafafa;
+  background: rgba(43, 127, 255, 0.25);
+  color: var(--ink);
 }

@@ -1,0 +1,86 @@
+/*
+ * macOS-light restyle. Remaps the dark utility classes the pages already use, so the pages
+ * themselves do not change. Tear out: delete this file and its @import in globals.css, restore
+ * className="dark" on <Html> in _document.tsx, and remove the three .asset-placeholder elements.
+ * Unlayered rules win over Tailwind's @layer utilities, so nothing here needs !important.
+ */
+
+:root {
+  --paper: #f2f2f0;
+  --surface: #ffffff;
+  --surface-2: #f5f5f7;
+  --ink: #1d1d1f;
+  --ink-2: #3a3a3c;
+  --ink-3: #6e6e73;
+  --ink-4: #8e8e93;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-2: rgba(0, 0, 0, 0.06);
+  --blue: #2b7fff;
+  --blue-2: #1a6be8;
+  --placeholder: #ff00e5;
+}
+
+/* ─── Placeholders for assets that do not exist yet ─── */
+.asset-placeholder {
+  background: var(--placeholder);
+  color: #fff;
+  overflow: hidden;
+}
+.asset-placeholder::after {
+  content: "ASSET: " attr(data-asset);
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font: 600 10px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ─── Surfaces ─── */
+.bg-\[\#050505\] { background-color: var(--paper); }
+.bg-\[\#050505\]\/92, .bg-\[\#0b0b0c\]\/94, .bg-\[\#0b0b0c\]\/96 { background-color: var(--surface); }
+.bg-\[\#0c0c0d\], .bg-\[\#111214\], .bg-\[\#1a1a1b\], .bg-white\/\[0\.03\], .bg-white\/\[0\.02\] { background-color: var(--surface); }
+.bg-\[\#0b0b0c\], .bg-\[\#0b1221\]\/70, .bg-\[\#0c1324\]\/70, .bg-black\/20, .bg-black\/30, .bg-black\/40 { background-color: var(--surface-2); }
+.bg-black\/60 { background-color: rgba(0, 0, 0, 0.3); }
+.bg-\[rgba\(5\,5\,5\,0\.16\)\] { background-color: rgba(0, 0, 0, 0.2); }
+.bg-white\/5, .bg-white\/\[0\.04\], .bg-white\/\[0\.05\], .bg-white\/\[0\.06\] { background-color: rgba(0, 0, 0, 0.04); }
+.hover\:bg-white\/5:hover, .hover\:bg-white\/\[0\.03\]:hover, .hover\:bg-white\/\[0\.05\]:hover, .hover\:bg-white\/\[0\.08\]:hover, .hover\:bg-\[\#111a2f\]:hover { background-color: rgba(0, 0, 0, 0.06); }
+.focus\:bg-\[\#090909\]:focus { background-color: var(--surface); }
+.bg-cyan-300\/10 { background-color: rgba(43, 127, 255, 0.1); }
+.bg-cyan-400 { background-color: var(--blue); }
+
+/* ─── Text ─── */
+.text-white, .text-slate-50, .text-slate-100, .text-slate-200, .hover\:text-white:hover, .group:hover .group-hover\:text-slate-200 { color: var(--ink); }
+.text-slate-300 { color: var(--ink-2); }
+.text-slate-400 { color: var(--ink-3); }
+.text-slate-500 { color: var(--ink-4); }
+.placeholder\:text-slate-500::placeholder { color: #a1a1a6; }
+.text-cyan-200 { color: var(--blue); }
+[class*="bg-rose-"].text-white, [class*="bg-indigo-"].text-white, [class*="bg-emerald-"].text-white, [class*="bg-amber-"].text-white,
+[class*="bg-green-"].text-white, [class*="bg-blue-"].text-white, [class*="bg-cyan-"].text-white, [class*="bg-red-"].text-white { color: #fff; }
+
+/* ─── Lines ─── */
+.border-white\/10, .border-white\/15 { border-color: var(--line); }
+.border-white\/\[0\.08\] { border-color: var(--line-2); }
+.border-white\/25 { border-color: rgba(0, 0, 0, 0.2); }
+.hover\:border-white\/15:hover { border-color: rgba(0, 0, 0, 0.16); }
+.focus\:border-white\/20:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43, 127, 255, 0.2); }
+.border-cyan-300\/20, .border-cyan-300\/30, .hover\:border-cyan-300\/30:hover { border-color: rgba(43, 127, 255, 0.4); }
+.divide-white\/\[0\.08\] > :not(:last-child) { border-color: var(--line-2); }
+.shadow-\[0_0_0_1px_rgba\(255\,255\,255\,0\.02\)\] { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06); }
+.shadow-\[inset_0_0_0_1px_rgba\(255\,255\,255\,0\.02\)\] { box-shadow: none; }
+.shadow-\[18px_0_40px_rgba\(0\,0\,0\,0\.18\)\], .shadow-\[24px_0_60px_rgba\(0\,0\,0\,0\.34\)\] { box-shadow: 12px 0 32px rgba(0, 0, 0, 0.06); }
+
+/* ─── Primary buttons: white-on-black becomes the blue pill ─── */
+.bg-white.text-black, .bg-indigo-600 { background-color: var(--blue); color: #fff; border-radius: 9999px; }
+.hover\:bg-slate-200:hover, .hover\:bg-indigo-700:hover { background-color: var(--blue-2); }
+
+/* ─── Accent text that was tuned for a dark ground ─── */
+.text-amber-200, .text-amber-300 { color: #b45309; }
+.text-rose-200, .text-rose-300, .text-rose-400 { color: #dc2626; }
+.text-emerald-100, .text-emerald-200, .text-emerald-300 { color: #047857; }
+
+/* ─── Form controls: the pages rely on the dark ground for their fill ─── */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea { background-color: var(--surface); color: var(--ink); }
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43, 127, 255, 0.2); }
