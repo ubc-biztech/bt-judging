@@ -20,6 +20,8 @@
   --placeholder: #ff00e5;
 }
 
+.paper { background: url("/paper.jpg") center top / 736px auto repeat; }
+
 /* ─── Placeholders for assets that do not exist yet ─── */
 .asset-placeholder {
   background: var(--placeholder);

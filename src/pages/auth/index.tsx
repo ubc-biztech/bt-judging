@@ -112,7 +112,7 @@ export default function Auth() {
           <span className="inline-flex rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
             {DEFAULT_EVENT_NAME}
           </span>
-          <div className="asset-placeholder relative mt-6 h-16 w-44 rounded-md" data-asset="hello hacks logo" />
+          <img src="/hh.svg" alt="HelloHacks" className="mt-6 h-16 w-auto" />
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl">Sign in</h1>
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             {(["admin", "judge", "team"] as const).map((r) => {
