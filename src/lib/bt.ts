@@ -13,8 +13,10 @@
 import {
   ApiError,
   ContractViolationError,
+  EventNotFoundError,
   ForbiddenError,
   NotAuthenticatedError,
+  TeamNotFoundError,
   createClient,
   type JudgingAdminReviewsInput,
   type JudgingAdminSetInput,
@@ -84,14 +86,9 @@ export async function loginAsAdmin(): Promise<Session> {
   try {
     await judging().admin.get();
   } catch (e) {
-    if (e instanceof ForbiddenError) {
-      await logout();
-      throw new Error("This account is not a BizTech admin.");
-    }
-    if (!isNotFound(e)) {
-      clearSession();
-      throw e;
-    }
+    if (isNotFound(e)) return session;
+    await logout();
+    throw e instanceof ForbiddenError ? new Error("This account is not a BizTech admin.") : e;
   }
   return session;
 }
@@ -118,7 +115,7 @@ export function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
   return String(e);
 }
-export const isNotFound = (e: unknown) => e instanceof ApiError && e.status === 404;
+export const isNotFound = (e: unknown) => e instanceof EventNotFoundError || e instanceof TeamNotFoundError || (e instanceof ApiError && e.status === 404);
 
 /** `await orNull(judging().info())` — null instead of a 404 error, for "does it exist" reads. */
 export async function orNull<T>(p: Promise<T>): Promise<T | null> {

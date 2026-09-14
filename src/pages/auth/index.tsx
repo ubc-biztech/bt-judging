@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { signIn, signInWithRedirect } from "aws-amplify/auth";
+import { signIn, signInWithRedirect, signOut } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
 import Layout from "@/components/Layout";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
@@ -73,7 +73,12 @@ export default function Auth() {
     run(async () => {
       if (!email.trim() || !password) throw new Error("Enter your BizTech email and password.");
       configureAmplify();
-      const { isSignedIn, nextStep } = await signIn({ username: email.trim(), password });
+      const attempt = () => signIn({ username: email.trim(), password });
+      const { isSignedIn, nextStep } = await attempt().catch(async (e) => {
+        if ((e as { name?: string }).name !== "UserAlreadyAuthenticatedException") throw e;
+        await signOut();
+        return attempt();
+      });
       if (!isSignedIn) throw new Error(`Finish setting up your account in the BizTech app first (${nextStep.signInStep}).`);
       return (await loginAsAdmin()).role;
     });
