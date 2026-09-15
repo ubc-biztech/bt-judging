@@ -14,6 +14,7 @@ import {
   AdjustmentsHorizontalIcon,
   ArrowRightOnRectangleIcon,
   Bars3Icon,
+  CalendarDaysIcon,
   ChartBarSquareIcon,
   ClipboardDocumentCheckIcon,
   ClipboardDocumentListIcon,
@@ -88,6 +89,13 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           match: /^\/admin\/assign$/
         },
         {
+          name: "Schedule",
+          href: "/admin/schedule",
+          hint: "Rooms, blocks, who presents when",
+          icon: CalendarDaysIcon,
+          match: /^\/admin\/schedule$/
+        },
+        {
           name: "Rubric",
           href: "/admin/rubric",
           hint: "Criteria and weighting",
@@ -142,6 +150,13 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           match: /^\/judge(?:\/(?!finals(?:\/|$)|rubric(?:\/|$))[^/]+)?$/
         },
         {
+          name: "Schedule",
+          href: "/schedule",
+          hint: "Your room, block by block",
+          icon: CalendarDaysIcon,
+          match: /^\/schedule$/
+        },
+        {
           name: "Rubric",
           href: "/judge/rubric",
           hint: "Scoring reference",
@@ -175,6 +190,13 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           hint: "Project links, summary, assets",
           icon: ClipboardDocumentCheckIcon,
           match: /^\/submit(?:\/.*)?$/
+        },
+        {
+          name: "Schedule",
+          href: "/schedule",
+          hint: "When and where you present",
+          icon: CalendarDaysIcon,
+          match: /^\/schedule$/
         },
         {
           name: "My Feedback",

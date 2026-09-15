@@ -63,6 +63,10 @@ the patch, and writes it back whole. Judges and teams keep their ids and codes b
 passed back; a new one gets both minted. Last write wins, so two organizers editing at once will
 clobber each other; the read-right-before-write keeps that window small.
 
+The prelim **schedule** lives in `settings.schedule`: rooms of judges, timed blocks, and a slot per team.
+Organizers edit it on **Admin → Schedule** and every save rewrites each judge's `assignedTeamIds` from
+their room and appends to a change log; judges and teams see it live on **/schedule**.
+
 Reviews are separate rows: a judge writes one with `judging().team(id).review(...)`, and
 `listReviews()` reads what the signed-in role may see.
 
