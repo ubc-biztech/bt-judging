@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
-import type { Judge } from "@ubc-biztech/sdk";
+import type { Judge, JudgingTeam } from "@ubc-biztech/sdk";
 import { eventOrEmpty, setJudges, errorMessage } from "@/lib/bt";
+import { CODE_PRESETS, normalizeCode, presetCodes, type CodePreset } from "@/lib/codes";
 
 function AdminJudgesInner() {
   return (
@@ -20,6 +21,8 @@ function AdminJudgesInner() {
 
 function Page() {
   const [list, setList] = useState<Judge[]>([]);
+  const [teams, setTeams] = useState<JudgingTeam[]>([]);
+  const [preset, setPreset] = useState<CodePreset>("first");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newJ, setNewJ] = useState({ name: "" });
@@ -29,7 +32,9 @@ function Page() {
   async function load() {
     setLoading(true);
     try {
-      setList((await eventOrEmpty()).judges);
+      const doc = await eventOrEmpty();
+      setList(doc.judges);
+      setTeams(doc.teams);
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -61,7 +66,15 @@ function Page() {
   }
 
   async function saveJudge(j: Judge) {
-    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, name: j.name } : x))));
+    const code = normalizeCode(j.code ?? "");
+    const clash = [...list.filter((x) => x.id !== j.id), ...teams].some((x) => x.code && normalizeCode(x.code) === code);
+    if (code && clash) return setError(`Code ${code} is already used by another judge or team.`);
+    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, name: j.name, code: code || x.code } : x))));
+  }
+
+  async function applyPreset() {
+    if (!confirm(`Replace every judge's code using "${CODE_PRESETS.find((p) => p.id === preset)?.label}"? Judges will need the new code to sign in.`)) return;
+    await run(() => setJudges((js) => presetCodes(js, teams.map((t) => t.code ?? ""), preset)));
   }
 
   async function resetAssignments(j: Judge) {
@@ -117,6 +130,27 @@ function Page() {
           </div>
         )}
         {error && <div className="mt-4 text-sm text-rose-300">{error}</div>}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+        <div className="mr-auto">
+          <div className="text-sm font-semibold text-slate-50">Codes</div>
+          <p className="mt-0.5 text-xs text-slate-400">{CODE_PRESETS.find((p) => p.id === preset)?.hint}</p>
+        </div>
+        <select
+          className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
+          value={preset}
+          onChange={(e) => setPreset(e.target.value as CodePreset)}
+        >
+          {CODE_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <button onClick={applyPreset} disabled={list.length === 0} className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50">
+          Apply to all judges
+        </button>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
@@ -176,6 +210,7 @@ function Row({
   onDelete: (j: Judge) => Promise<void>;
 }) {
   const [edit, setEdit] = useState(j);
+  useEffect(() => setEdit(j), [j]);
   return (
     <tr className="border-t border-gray-100 dark:border-white/10">
       <td className="px-4 py-2">
@@ -186,7 +221,12 @@ function Row({
         />
       </td>
       <td className="px-4 py-2">
-        <span className="font-mono text-sm tracking-wider">{j.code ?? "••••"}</span>
+        <input
+          className="w-40 rounded-md border border-gray-200 px-2 py-1 font-mono text-sm tracking-wider dark:border-white/10 dark:bg-transparent"
+          value={edit.code ?? ""}
+          onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+          onBlur={(e) => setEdit({ ...edit, code: normalizeCode(e.target.value) })}
+        />
       </td>
       <td className="px-4 py-2">{edit.assignedTeamIds?.length ?? 0}</td>
       <td className="px-4 py-2">
