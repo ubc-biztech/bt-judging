@@ -100,7 +100,7 @@ function Page() {
     setS({ ...s, blocks: [...s.blocks, { id: newId("blk"), label: `Block ${s.blocks.length + 1}`, startsAt: last ? addMinutes(last.startsAt, minutes) : "09:00" }] });
   };
   const removeRoom = (id: string) => setS({ ...s, rooms: s.rooms.filter((r) => r.id !== id), slots: s.slots.filter((x) => x.roomId !== id) });
-  const removeBlock = (id: string) => setS({ ...s, blocks: s.blocks.filter((b) => b.id !== id), slots: s.slots.filter((x) => x.blockId !== id) });
+  const removeBlock = (id: string) => setS({ ...s, blocks: s.blocks.filter((b) => b.id !== id), slots: s.slots.filter((x) => x.blockId !== id), activeBlockId: s.activeBlockId === id ? undefined : s.activeBlockId });
   const toggleJudge = (roomId: string, judgeId: string) =>
     setS({ ...s, rooms: s.rooms.map((r) => (r.id === roomId ? { ...r, judgeIds: r.judgeIds.includes(judgeId) ? r.judgeIds.filter((j) => j !== judgeId) : [...r.judgeIds, judgeId] } : r)) });
 
@@ -164,6 +164,13 @@ function Page() {
           <div className="mt-3 space-y-2">
             {s.blocks.map((b) => (
               <div key={b.id} className="flex items-center gap-2">
+                <button
+                  title={s.activeBlockId === b.id ? "Active now. Click to clear." : "Mark as the active block"}
+                  onClick={() => setS({ ...s, activeBlockId: s.activeBlockId === b.id ? undefined : b.id })}
+                  className={`h-7 shrink-0 rounded-full border px-2.5 text-[11px] font-semibold ${s.activeBlockId === b.id ? "border-cyan-300/30 bg-cyan-300/10 text-slate-50" : "border-white/10 text-slate-500 hover:text-slate-200"}`}
+                >
+                  {s.activeBlockId === b.id ? "Active" : "Set active"}
+                </button>
                 <input className={`${input} flex-1`} value={b.label} onChange={(e) => setS({ ...s, blocks: s.blocks.map((x) => (x.id === b.id ? { ...x, label: e.target.value } : x)) })} />
                 <input type="time" className={input} value={b.startsAt} onChange={(e) => setS({ ...s, blocks: s.blocks.map((x) => (x.id === b.id ? { ...x, startsAt: e.target.value } : x)) })} />
                 <button className={chipBtn} onClick={() => removeBlock(b.id)}>Remove</button>
@@ -206,7 +213,7 @@ function Page() {
             <tbody>
               {s.blocks.map((b) => (
                 <tr key={b.id} className="border-t border-white/10">
-                  <td className="sticky left-0 px-3 py-2 align-top">
+                  <td className={`sticky left-0 px-3 py-2 align-top ${s.activeBlockId === b.id ? "bg-cyan-300/10" : ""}`}>
                     <div className="font-semibold text-slate-50">{b.label}</div>
                     <div className="text-xs text-slate-400">{b.startsAt}</div>
                   </td>

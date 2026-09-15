@@ -52,6 +52,10 @@ export function describeChanges(before: Schedule, after: Schedule, teams: Pick<J
     else if (prev.startsAt !== b.startsAt) out.push(`${b.label}: ${prev.startsAt} → ${b.startsAt}`);
   }
   for (const b of before.blocks) if (!after.blocks.some((x) => x.id === b.id)) out.push(`Block removed: ${b.label}`);
+  if (before.activeBlockId !== after.activeBlockId) {
+    const label = (s: Schedule) => s.blocks.find((b) => b.id === s.activeBlockId)?.label ?? "none";
+    out.push(`Active block: ${label(before)} → ${label(after)}`);
+  }
   return out;
 }
 
