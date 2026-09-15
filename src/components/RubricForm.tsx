@@ -42,6 +42,9 @@ export default function RubricForm({
   const pointTotals = rubricUsesPointTotals({ criteria, scaleMax, scoreMode: scoreMode ?? "points" });
   const totalMax = rubricTotalMax({ criteria, scaleMax });
 
+  // Seed from content, not object identity: the parent polls and hands down fresh objects every
+  // few seconds, which must not wipe what the judge has typed.
+  const seed = JSON.stringify([criteria.map((c) => [c.id, c.maxScore ?? null]), scaleMax, defaultScores ?? null]);
   useEffect(() => {
     const s: Record<string, number> = {};
     for (const c of criteria) {
@@ -49,7 +52,8 @@ export default function RubricForm({
       s[c.id] = clampScore(defaultScores?.[c.id] ?? 0, max);
     }
     setScores(s);
-  }, [criteria, defaultScores, scaleMax]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   useEffect(() => {
     if (typeof defaultFeedback === "string") setFeedback(defaultFeedback);
