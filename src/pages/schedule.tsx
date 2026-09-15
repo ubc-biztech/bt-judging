@@ -28,7 +28,10 @@ function Page() {
   return (
     <div className="max-w-7xl">
       <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Schedule</h1>
-      <p className="mt-1 text-sm text-slate-400">Live. Refreshes every 10 seconds; your own slots are highlighted.</p>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-400">Live. Refreshes every 10 seconds; your own slots are highlighted.</p>
+        <a href="/schedule/board" target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08]">Open display ↗</a>
+      </div>
       <div className="mt-6 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead>

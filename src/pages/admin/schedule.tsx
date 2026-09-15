@@ -112,6 +112,7 @@ function Page() {
           <p className="mt-1 text-sm text-slate-400">Rooms stay put; blocks are times; every room judges at the same time. Saving rewrites each judge&apos;s assigned teams from their room.</p>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/schedule/board" target="_blank" rel="noreferrer" className={btn}>Open display ↗</a>
           {dirty && <span className="text-xs text-amber-300">Unsaved changes</span>}
           <button className={btn} disabled={!dirty || busy} onClick={() => setS(saved)}>Discard</button>
           <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-50" disabled={!dirty || busy} onClick={save}>
