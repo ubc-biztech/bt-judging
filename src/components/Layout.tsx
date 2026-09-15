@@ -384,31 +384,26 @@ export default function Layout({ children }: { children: ReactNode }) {
         ))}
       </div>
 
-      <div className={["mt-6 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
-        <div className="flex items-center gap-3">
-          <img src={AVATAR[role]} alt="" className="size-9 shrink-0 rounded-full" />
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
-              Signed In
-            </p>
-            <p className="mt-0.5 text-sm font-medium text-slate-100">
-              {accountLabel}
-            </p>
-          </div>
+      <div className={["mt-6 flex items-center gap-3 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
+        <img src={AVATAR[role]} alt="" className="size-9 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Signed In</p>
+          <p className="mt-0.5 truncate text-sm font-medium text-slate-100">{accountLabel}</p>
         </div>
         {ready && session ? (
           <button
             onClick={signOut}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs font-semibold text-slate-100 transition hover:bg-white/[0.08]"
+            title="Sign out"
+            aria-label="Sign out"
+            className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] p-2 text-slate-100 transition hover:bg-white/[0.08]"
           >
             <ArrowRightOnRectangleIcon className="size-4" />
-            Sign Out
           </button>
         ) : (
           <Link
             href="/auth"
             onClick={() => mobile && setSidebarOpen(false)}
-            className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs font-semibold text-slate-100 transition hover:bg-white/[0.08]"
+            className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/[0.08]"
           >
             Sign In
           </Link>
