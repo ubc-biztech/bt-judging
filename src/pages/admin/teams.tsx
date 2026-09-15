@@ -5,8 +5,9 @@ import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
 import { EVENT_ID } from "@/lib/event";
 import Link from "next/link";
-import type { JudgingTeam as Team } from "@ubc-biztech/sdk";
+import type { Judge, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import { eventOrEmpty, setTeams, errorMessage } from "@/lib/bt";
+import { TEAM_CODE_PRESETS, normalizeCode, presetTeamCodes, type TeamCodePreset } from "@/lib/codes";
 
 export default function AdminTeams() {
   return (
@@ -20,6 +21,8 @@ export default function AdminTeams() {
 
 function Page() {
   const [list, setList] = useState<Team[]>([]);
+  const [judges, setJudges] = useState<Judge[]>([]);
+  const [preset, setPreset] = useState<TeamCodePreset>("name");
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", members: "" });
   const [error, setError] = useState("");
@@ -28,7 +31,9 @@ function Page() {
   async function load() {
     setLoading(true);
     try {
-      setList((await eventOrEmpty()).teams);
+      const doc = await eventOrEmpty();
+      setList(doc.teams);
+      setJudges(doc.judges);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -64,8 +69,22 @@ function Page() {
     }
   }
 
+  async function applyPreset() {
+    if (!confirm(`Replace every team's code using "${TEAM_CODE_PRESETS.find((p) => p.id === preset)?.label}"? Teams will need the new code to sign in.`)) return;
+    setError("");
+    try {
+      const doc = await setTeams((teams) => presetTeamCodes(teams, judges.map((j) => j.code ?? ""), preset));
+      setList(doc.teams);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
   async function saveTeam(t: Team) {
     setError("");
+    const code = normalizeCode(t.code ?? "");
+    const clash = [...list.filter((x) => x.id !== t.id), ...judges].some((x) => x.code && normalizeCode(x.code) === code);
+    if (code && clash) return setError(`Code ${code} is already used by another team or judge.`);
     try {
       // Organizers edit teams by rewriting the event document; id and code are kept.
       const doc = await setTeams((teams) =>
@@ -74,6 +93,7 @@ function Page() {
             ? {
                 ...x,
                 name: t.name,
+                code: code || x.code,
                 members: t.members,
                 github: t.github || undefined,
                 devpost: t.devpost || undefined,
@@ -181,6 +201,27 @@ function Page() {
         </div>
       </div>
 
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+        <div className="mr-auto">
+          <div className="text-sm font-semibold text-slate-50">Presets</div>
+          <p className="mt-0.5 text-xs text-slate-400">{TEAM_CODE_PRESETS.find((p) => p.id === preset)?.hint}</p>
+        </div>
+        <select
+          className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
+          value={preset}
+          onChange={(e) => setPreset(e.target.value as TeamCodePreset)}
+        >
+          {TEAM_CODE_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <button onClick={applyPreset} disabled={list.length === 0} className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50">
+          Apply to all teams
+        </button>
+      </div>
+
       <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-white/5">
@@ -237,6 +278,7 @@ function EditableTeamRow({
 }) {
   const [edit, setEdit] = useState<Team>({ ...t });
   const [member, setMember] = useState("");
+  useEffect(() => setEdit({ ...t }), [t]);
 
   function addMember() {
     const m = member.trim();
@@ -295,9 +337,12 @@ function EditableTeamRow({
       </td>
 
       <td className="px-4 py-3">
-        <span className="font-mono text-sm" title="Login code (server-generated)">
-          {t.code || "—"}
-        </span>
+        <input
+          className="w-40 rounded-md border border-gray-200 px-2 py-1 font-mono text-sm tracking-wider dark:border-white/10 dark:bg-transparent"
+          value={edit.code ?? ""}
+          onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+          onBlur={(e) => setEdit({ ...edit, code: normalizeCode(e.target.value) })}
+        />
       </td>
 
       <td className="px-4 py-3">

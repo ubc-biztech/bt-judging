@@ -134,7 +134,7 @@ function Page() {
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div className="mr-auto">
-          <div className="text-sm font-semibold text-slate-50">Codes</div>
+          <div className="text-sm font-semibold text-slate-50">Presets</div>
           <p className="mt-0.5 text-xs text-slate-400">{CODE_PRESETS.find((p) => p.id === preset)?.hint}</p>
         </div>
         <select
