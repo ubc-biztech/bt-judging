@@ -30,7 +30,6 @@ function Board() {
   }, []);
   const s = doc?.settings.schedule ?? EMPTY_SCHEDULE;
   const teamName = (id: string) => doc?.teams.find((t) => t.id === id)?.name ?? id;
-  const judgeName = (id: string) => doc?.judges.find((j) => j.id === id)?.name ?? id;
   const current = s.activeBlockId;
 
   return (
@@ -63,6 +62,7 @@ function Board() {
               <tr key={r.id}>
                 <td className="sticky left-0 z-10 border-t border-white/10 bg-[#050505] px-4 py-4 align-top">
                   <div className="text-xl font-semibold text-slate-50">{r.name}</div>
+                  {r.usher && <div className="mt-1 max-w-48 text-sm text-slate-400">Your Usher: {r.usher}</div>}
                 </td>
                 {s.blocks.map((b) => (
                   <td key={b.id} className={`border-t border-l border-white/[0.08] px-4 py-4 align-top ${b.id === current ? "bg-cyan-300/10" : ""}`}>
@@ -84,7 +84,7 @@ function Board() {
 
       <div className="mt-6 flex items-center gap-2 text-sm text-slate-400">
         <span className="inline-block size-3 rounded-sm border border-cyan-300/30 bg-cyan-300/10" aria-hidden="true" />
-        <span>Being judged now</span>
+        <span>CURRENTLY JUDGING</span>
       </div>
 
       <button

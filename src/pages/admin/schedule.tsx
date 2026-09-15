@@ -133,6 +133,7 @@ function Page() {
               <div key={r.id} className="rounded-lg border border-white/10 bg-[#0b0b0c] p-3">
                 <div className="flex items-center gap-2">
                   <input className={`${input} flex-1`} value={r.name} onChange={(e) => setS({ ...s, rooms: s.rooms.map((x) => (x.id === r.id ? { ...x, name: e.target.value } : x)) })} />
+                  <input className={`${input} w-40`} placeholder="Usher" value={r.usher ?? ""} onChange={(e) => setS({ ...s, rooms: s.rooms.map((x) => (x.id === r.id ? { ...x, usher: e.target.value || undefined } : x)) })} />
                   <button className={chipBtn} onClick={() => removeRoom(r.id)}>Remove</button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
