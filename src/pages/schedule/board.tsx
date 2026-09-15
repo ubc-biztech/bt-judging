@@ -82,11 +82,16 @@ function Board() {
         </table>
       </div>
 
+      <div className="mt-6 flex items-center gap-2 text-sm text-slate-400">
+        <span className="inline-block size-3 rounded-sm border border-cyan-300/30 bg-cyan-300/10" aria-hidden="true" />
+        <span>Being judged now</span>
+      </div>
+
       <button
         onClick={load}
         disabled={busy}
         aria-label="Refresh"
-        className="fixed bottom-4 left-4 text-xs text-slate-200/60 transition hover:text-slate-50 disabled:opacity-40"
+        className="fixed bottom-4 left-4 text-xs text-[#CCCCCC] transition hover:text-slate-50 disabled:opacity-40"
       >
         {busy ? "refreshing…" : "refresh"}
       </button>
