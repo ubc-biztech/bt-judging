@@ -29,7 +29,37 @@ function Page() {
   const [minutes, setMinutes] = useState(15);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [moving, setMoving] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+
+  const dragProps = (teamId: string) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData("text/plain", teamId);
+      e.dataTransfer.effectAllowed = "move";
+      setDragging(teamId);
+    },
+    onDragEnd: () => {
+      setDragging(null);
+      setOver(null);
+    }
+  });
+  const dropProps = (key: string, onDrop: (teamId: string) => void) => ({
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (over !== key) setOver(key);
+    },
+    onDragLeave: () => over === key && setOver(null),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData("text/plain") || dragging;
+      if (id) onDrop(id);
+      setDragging(null);
+      setOver(null);
+    }
+  });
+  const dropRing = (key: string) => (over === key ? "ring-2 ring-cyan-300/60 bg-cyan-300/10" : "");
 
   useEffect(() => {
     eventOrEmpty()
@@ -147,9 +177,17 @@ function Page() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Grid</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">{free.length} unscheduled</span>
+            <span className="text-xs text-slate-400">Drag teams between cells. Drop here to unschedule.</span>
             <button className={btn} disabled={!s.rooms.length || !free.length} onClick={() => setS(autoFill(s, teams, minutes))}>Auto-fill</button>
           </div>
+        </div>
+        <div className={`mt-3 flex min-h-12 flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-white/15 p-2 ${dropRing("tray")}`} {...dropProps("tray", (id) => setS(unplace(s, id)))}>
+          <span className="mr-1 text-xs uppercase tracking-[0.12em] text-slate-500">Unscheduled · {free.length}</span>
+          {free.map((t) => (
+            <span key={t.id} {...dragProps(t.id)} className={`cursor-grab rounded-full border border-white/10 bg-[#0b0b0c] px-2.5 py-1 text-xs text-slate-100 active:cursor-grabbing ${dragging === t.id ? "opacity-40" : ""}`}>
+              {t.name}
+            </span>
+          ))}
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full border-separate border-spacing-0 text-sm">
@@ -172,42 +210,19 @@ function Page() {
                     <div className="text-xs text-slate-400">{b.startsAt}</div>
                   </td>
                   {s.rooms.map((r) => (
-                    <td key={r.id} className="min-w-52 border-l border-white/[0.08] px-3 py-2 align-top">
-                      <div className="space-y-1.5">
+                    <td key={r.id} className={`min-w-52 border-l border-white/[0.08] px-3 py-2 align-top ${dropRing(`${b.id}|${r.id}`)}`} {...dropProps(`${b.id}|${r.id}`, (id) => setS(place(s, id, b.id, r.id)))}>
+                      <div className="min-h-10 space-y-1.5">
                         {slotAt(s, b.id, r.id).map((x) => (
-                          <div key={x.teamId} className="rounded-lg border border-white/10 bg-[#0b0b0c] px-2.5 py-1.5">
+                          <div key={x.teamId} {...dragProps(x.teamId)} className={`cursor-grab rounded-lg border border-white/10 bg-[#0b0b0c] px-2.5 py-1.5 active:cursor-grabbing ${dragging === x.teamId ? "opacity-40" : ""}`}>
                             <div className="flex items-center justify-between gap-2">
                               <span className="truncate text-sm text-slate-100">{teamName(x.teamId)}</span>
                               <div className="flex shrink-0 gap-0.5">
                                 <button className={chipBtn} title="Push to the next block in this room" onClick={() => setS(delay(s, x.teamId, minutes))}>Delay</button>
-                                <button className={chipBtn} onClick={() => setMoving(moving === x.teamId ? null : x.teamId)}>Move</button>
-                                <button className={chipBtn} onClick={() => setS(unplace(s, x.teamId))}>×</button>
+                                <button className={chipBtn} title="Unschedule" onClick={() => setS(unplace(s, x.teamId))}>×</button>
                               </div>
                             </div>
-                            {moving === x.teamId && (
-                              <div className="mt-1.5 flex gap-1">
-                                <select className={`${input} flex-1`} defaultValue={b.id} id={`mb-${x.teamId}`}>
-                                  {s.blocks.map((bb) => <option key={bb.id} value={bb.id}>{bb.label} · {bb.startsAt}</option>)}
-                                </select>
-                                <select className={`${input} flex-1`} defaultValue={r.id} id={`mr-${x.teamId}`}>
-                                  {s.rooms.map((rr) => <option key={rr.id} value={rr.id}>{rr.name}</option>)}
-                                </select>
-                                <button className={btn} onClick={() => {
-                                  const bid = (document.getElementById(`mb-${x.teamId}`) as HTMLSelectElement).value;
-                                  const rid = (document.getElementById(`mr-${x.teamId}`) as HTMLSelectElement).value;
-                                  setS(place(s, x.teamId, bid, rid));
-                                  setMoving(null);
-                                }}>Go</button>
-                              </div>
-                            )}
                           </div>
                         ))}
-                        {free.length > 0 && (
-                          <select className={`${input} w-full text-xs`} value="" onChange={(e) => e.target.value && setS(place(s, e.target.value, b.id, r.id))}>
-                            <option value="">Add team…</option>
-                            {free.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                          </select>
-                        )}
                       </div>
                     </td>
                   ))}
