@@ -66,6 +66,8 @@ clobber each other; the read-right-before-write keeps that window small.
 The prelim **schedule** lives in `settings.schedule`: rooms of judges, timed blocks, and a slot per team.
 Organizers edit it on **Admin → Schedule** and every save rewrites each judge's `assignedTeamIds` from
 their room and appends to a change log; judges and teams see it live on **/schedule**.
+**Admin → Assignments** holds only exceptions: untick a judge for a team, or "Leaves after Block N", and that
+judge stops seeing those teams and coverage drops accordingly. The room and the schedule do not change.
 
 Reviews are separate rows: a judge writes one with `judging().team(id).review(...)`, and
 `listReviews()` reads what the signed-in role may see.

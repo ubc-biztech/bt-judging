@@ -12,6 +12,7 @@ import { useRouter } from "next/router";
 import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
 import {
   ArrowRightOnRectangleIcon,
+  AdjustmentsHorizontalIcon,
   Bars3Icon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
@@ -79,6 +80,13 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           hint: "Edit team records and links",
           icon: ClipboardDocumentListIcon,
           match: /^\/admin\/teams(?:\/.*)?$/
+        },
+        {
+          name: "Assignments",
+          href: "/admin/assign",
+          hint: "Exceptions: who skips what",
+          icon: AdjustmentsHorizontalIcon,
+          match: /^\/admin\/assign$/
         },
         {
           name: "Schedule",

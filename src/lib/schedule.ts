@@ -14,12 +14,14 @@ export const slotOf = (s: Schedule, teamId: string) => s.slots.find((x) => x.tea
 export const unscheduled = <T extends Pick<JudgingTeam, "id">>(s: Schedule, teams: T[]): T[] => teams.filter((t) => !slotOf(s, t.id));
 
 /** Every judge's teams, in block order, from the room they sit in. Judges in no room keep an empty list. */
+export const isExcluded = (s: Schedule, judgeId: string, teamId: string) => (s.exclusions ?? []).some((e) => e.judgeId === judgeId && e.teamId === teamId);
+
 export function assignmentsFrom<J extends Pick<Partial<Judge>, "id" | "assignedTeamIds">>(s: Schedule, judges: J[]): J[] {
   const blockOrder = new Map(s.blocks.map((b, i) => [b.id, i]));
   return judges.map((j) => {
     const rooms = s.rooms.filter((r) => j.id && r.judgeIds.includes(j.id)).map((r) => r.id);
     const teams = s.slots
-      .filter((x) => rooms.includes(x.roomId))
+      .filter((x) => rooms.includes(x.roomId) && !(j.id && isExcluded(s, j.id, x.teamId)))
       .sort((a, b) => (blockOrder.get(a.blockId) ?? 0) - (blockOrder.get(b.blockId) ?? 0))
       .map((x) => x.teamId);
     return { ...j, assignedTeamIds: [...new Set(teams)] };
@@ -52,6 +54,12 @@ export function describeChanges(before: Schedule, after: Schedule, teams: Pick<J
     else if (prev.startsAt !== b.startsAt) out.push(`${b.label}: ${prev.startsAt} → ${b.startsAt}`);
   }
   for (const b of before.blocks) if (!after.blocks.some((x) => x.id === b.id)) out.push(`Block removed: ${b.label}`);
+  const key = (e: { judgeId: string; teamId: string }) => `${e.judgeId}|${e.teamId}`;
+  const was = new Set((before.exclusions ?? []).map(key));
+  const now = new Set((after.exclusions ?? []).map(key));
+  const name = (id: string) => teams.find((t) => t.id === id)?.name ?? id;
+  for (const e of after.exclusions ?? []) if (!was.has(key(e))) out.push(`Judge ${e.judgeId} excused from ${name(e.teamId)}`);
+  for (const e of before.exclusions ?? []) if (!now.has(key(e))) out.push(`Judge ${e.judgeId} back on ${name(e.teamId)}`);
   if (before.activeBlockId !== after.activeBlockId) {
     const label = (s: Schedule) => s.blocks.find((b) => b.id === s.activeBlockId)?.label ?? "none";
     out.push(`Active block: ${label(before)} → ${label(after)}`);
@@ -124,4 +132,19 @@ export function placeInRoom(s: Schedule, teamId: string, roomId: string, minutes
   const last = without.blocks[without.blocks.length - 1];
   const block = { id: newId("blk"), label: `Block ${without.blocks.length + 1}`, startsAt: last ? addMinutes(last.startsAt, minutesPerBlock) : "09:00" };
   return place({ ...without, blocks: [...without.blocks, block] }, teamId, block.id, roomId);
+}
+
+export function toggleExclusion(s: Schedule, judgeId: string, teamId: string): Schedule {
+  const list = s.exclusions ?? [];
+  return { ...s, exclusions: isExcluded(s, judgeId, teamId) ? list.filter((e) => !(e.judgeId === judgeId && e.teamId === teamId)) : [...list, { judgeId, teamId }] };
+}
+
+/** Excuse a judge from every team their rooms judge in `blockId` and later blocks. */
+export function excludeFromBlock(s: Schedule, judgeId: string, blockId: string): Schedule {
+  const from = s.blocks.findIndex((b) => b.id === blockId);
+  if (from < 0) return s;
+  const later = new Set(s.blocks.slice(from).map((b) => b.id));
+  const rooms = s.rooms.filter((r) => r.judgeIds.includes(judgeId)).map((r) => r.id);
+  const add = s.slots.filter((x) => rooms.includes(x.roomId) && later.has(x.blockId) && !isExcluded(s, judgeId, x.teamId)).map((x) => ({ judgeId, teamId: x.teamId }));
+  return { ...s, exclusions: [...(s.exclusions ?? []), ...add] };
 }
