@@ -30,6 +30,7 @@ function Board() {
   }, []);
   const s = doc?.settings.schedule ?? EMPTY_SCHEDULE;
   const teamName = (id: string) => doc?.teams.find((t) => t.id === id)?.name ?? id;
+  const firstNames = (id: string) => (doc?.teams.find((t) => t.id === id)?.members ?? []).map((m) => m.trim().split(/\s+/)[0]).filter(Boolean).join(", ");
   const current = s.activeBlockId;
 
   return (
@@ -67,8 +68,9 @@ function Board() {
                 {s.blocks.map((b) => (
                   <td key={b.id} className={`border-t border-l border-white/[0.08] px-4 py-4 align-top ${b.id === current ? "bg-cyan-300/10" : ""}`}>
                     {slotAt(s, b.id, r.id).map((x) => (
-                      <div key={x.teamId} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xl font-medium text-slate-50">
-                        {teamName(x.teamId)}
+                      <div key={x.teamId} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                        <div className="text-xl font-medium text-slate-50">{teamName(x.teamId)}</div>
+                        {firstNames(x.teamId) && <div className="mt-0.5 text-sm text-slate-400">{firstNames(x.teamId)}</div>}
                       </div>
                     ))}
                   </td>
