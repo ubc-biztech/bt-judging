@@ -32,7 +32,7 @@ function Board() {
       <div className="flex items-end justify-between gap-6">
         <div>
           <img src="/hh.svg" alt="HelloHacks" className="h-12 w-auto" />
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-50">{doc?.settings.eventName ?? "Schedule"}</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-50">Judging Schedule</h1>
         </div>
         <div className="text-right text-sm text-slate-400">
           <div className="text-3xl font-semibold tabular-nums text-slate-50">{now}</div>
@@ -58,7 +58,6 @@ function Board() {
               <tr key={r.id}>
                 <td className="sticky left-0 z-10 border-t border-white/10 bg-[#050505] px-4 py-4 align-top">
                   <div className="text-xl font-semibold text-slate-50">{r.name}</div>
-                  <div className="mt-1 max-w-48 text-sm text-slate-400">{r.judgeIds.map(judgeName).join(", ")}</div>
                 </td>
                 {s.blocks.map((b) => (
                   <td key={b.id} className={`border-t border-l border-white/[0.08] px-4 py-4 align-top ${b.id === current ? "bg-cyan-300/10" : ""}`}>
