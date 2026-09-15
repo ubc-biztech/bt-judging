@@ -118,8 +118,8 @@ function AdminHome() {
     }
     if (data.assignedTeams < data.teams || data.underCoveredTeams > 0) {
       return {
-        href: "/admin/assign",
-        label: "Finish assignments",
+        href: "/admin/schedule",
+        label: "Finish the schedule",
         detail: `${data.underCoveredTeams} team${data.underCoveredTeams === 1 ? "" : "s"} still below coverage.`
       };
     }
@@ -170,12 +170,12 @@ function AdminHome() {
       ok: data.teams > 0
     },
     {
-      label: "Assignments",
+      label: "Schedule",
       value:
         data.teams === 0
           ? "Waiting on teams"
-          : `${data.assignedTeams}/${data.teams} assigned`,
-      href: "/admin/assign",
+          : `${data.assignedTeams}/${data.teams} scheduled`,
+      href: "/admin/schedule",
       action: "Open",
       ok: data.teams > 0 && data.underCoveredTeams === 0
     },
