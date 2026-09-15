@@ -1,446 +1,161 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { EVENT_ID } from "@/lib/event";
-import type { Judge as ApiJudge, JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { eventOrEmpty, setJudges as saveJudges, errorMessage } from "@/lib/bt";
-import { autoAssign as balancedAssign } from "@/lib/assign";
+import type { Judge, JudgingTeam as Team } from "@ubc-biztech/sdk";
+import { eventOrEmpty, saveEvent, errorMessage } from "@/lib/bt";
+import { getSession } from "@/lib/session";
+import { EMPTY_SCHEDULE, assignmentsFrom, autoFill, describeChanges, placeInRoom, slotOf, unplace, unscheduled, withChanges, type Schedule } from "@/lib/schedule";
 
-/** Capacity is a UI-only planning aid; the API does not store it. */
-type Judge = ApiJudge & { capacity?: number };
+export default dynamic(() => Promise.resolve(() => (
+  <RoleGate allow={["admin"]}>
+    <Layout>
+      <Page />
+    </Layout>
+  </RoleGate>
+)), { ssr: false });
 
-const PAGE_SIZE = 12;
-
-export default function AdminAssign() {
-  return (
-    <RoleGate allow={["admin"]}>
-      <Layout>
-        <Page />
-      </Layout>
-    </RoleGate>
-  );
-}
+const card = "rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]";
+const select = "rounded-md border border-white/10 bg-[#0b0b0c] px-2 py-1 text-xs text-slate-100";
+const btn = "rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50";
 
 function Page() {
-  const [judges, setJudges] = useState<Judge[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [requiredPerTeam, setRequiredPerTeam] = useState<number>(3);
-  const [filter, setFilter] = useState({
-    searchTeam: "",
-    searchJudge: "",
-    track: "all"
-  });
-  const [page, setPage] = useState(0);
+  const [judges, setJudges] = useState<Judge[]>([]);
+  const [saved, setSaved] = useState<Schedule>(EMPTY_SCHEDULE);
+  const [s, setS] = useState<Schedule>(EMPTY_SCHEDULE);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const doc = await eventOrEmpty();
-        setRequiredPerTeam(doc.settings.perTeamJudges ?? 3);
-        setJudges(doc.judges);
+    eventOrEmpty()
+      .then((doc) => {
         setTeams(doc.teams);
-      } catch (e) {
-        setError(errorMessage(e));
-      } finally {
-        setLoading(false);
-      }
-    })();
+        setJudges(doc.judges);
+        const sched = doc.settings.schedule ?? EMPTY_SCHEDULE;
+        setSaved(sched);
+        setS(sched);
+      })
+      .catch((e) => setError(errorMessage(e)));
   }, []);
 
-  /** One whole-document write per change; the API stores assignments on the judges. */
-  async function saveAssignments(next: Record<string, string[]>) {
+  const dirty = useMemo(() => JSON.stringify(s) !== JSON.stringify(saved), [s, saved]);
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const judgeName = (id: string) => judges.find((j) => j.id === id)?.name ?? id;
+  const blockLabel = (id: string) => s.blocks.find((b) => b.id === id)?.label ?? "";
+  const blockOrder = useMemo(() => new Map(s.blocks.map((b, i) => [b.id, i])), [s.blocks]);
+  const free = unscheduled(s, teams);
+  const matches = (t: Team) => !search || t.name.toLowerCase().includes(search.toLowerCase());
+  const roomTeams = (roomId: string) =>
+    s.slots
+      .filter((x) => x.roomId === roomId)
+      .sort((a, b) => (blockOrder.get(a.blockId) ?? 0) - (blockOrder.get(b.blockId) ?? 0))
+      .map((x) => ({ slot: x, team: teamById.get(x.teamId) }))
+      .filter((x): x is { slot: typeof x.slot; team: Team } => !!x.team && matches(x.team));
+
+  async function save() {
+    setBusy(true);
+    setError("");
     try {
-      const saved = await saveJudges((js) => js.map((j) => (j.id && j.id in next ? { ...j, assignedTeamIds: next[j.id] } : j)));
-      setJudges((prev) => saved.judges.map((j) => ({ ...j, capacity: prev.find((x) => x.id === j.id)?.capacity })));
+      const next = withChanges(s, describeChanges(saved, s, teams), getSession()?.id);
+      const doc = await saveEvent((d) => ({ ...d, settings: { ...d.settings, schedule: next }, judges: assignmentsFrom(next, d.judges) }));
+      const stored = doc.settings.schedule ?? EMPTY_SCHEDULE;
+      setSaved(stored);
+      setS(stored);
+      setJudges(doc.judges);
     } catch (e) {
       setError(errorMessage(e));
     }
+    setBusy(false);
   }
 
-  const filteredJudges = useMemo(() => {
-    const s = filter.searchJudge.trim().toLowerCase();
-    return judges.filter((j) => (j.name || "").toLowerCase().includes(s));
-  }, [judges, filter.searchJudge]);
-
-  const filteredTeamsAll = useMemo(() => {
-    const s = filter.searchTeam.trim().toLowerCase();
-    return teams.filter((t) => (t.name || "").toLowerCase().includes(s));
-  }, [teams, filter.searchTeam]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredTeamsAll.length / PAGE_SIZE)
-  );
-  const pagedTeams = useMemo(
-    () =>
-      filteredTeamsAll.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
-    [filteredTeamsAll, page]
-  );
-
-  const coverage = useMemo(() => {
-    const count: Record<string, number> = {};
-    judges.forEach((j) =>
-      (j.assignedTeamIds || []).forEach((tid) => {
-        count[tid] = (count[tid] || 0) + 1;
-      })
-    );
-    return count;
-  }, [judges]);
-
-  async function toggleJudgeTeam(j: Judge, teamId: string) {
-    const assigned = new Set(j.assignedTeamIds || []);
-    assigned.has(teamId) ? assigned.delete(teamId) : assigned.add(teamId);
-    await saveAssignments({ [j.id]: Array.from(assigned) });
-  }
-
-  async function bulkAssignToJudge(judgeId: string) {
-    const j = judges.find((x) => x.id === judgeId);
-    if (!j) return;
-    const cap = Number(j.capacity ?? 999);
-    const current = new Set(j.assignedTeamIds || []);
-
-    const sorted = [...filteredTeamsAll].sort(
-      (a, b) => (coverage[a.id] || 0) - (coverage[b.id] || 0)
-    );
-    for (const t of sorted) {
-      if (current.size >= cap) break;
-      const cov = coverage[t.id] || 0;
-      if (cov >= requiredPerTeam) continue;
-      current.add(t.id);
-    }
-
-    await saveAssignments({ [j.id]: Array.from(current) });
-  }
-
-  function setCapacity(j: Judge, val: number) {
-    // Not persisted: capacity is only used by Fill / Auto-assign in this session.
-    setJudges((prev) =>
-      prev.map((x) => (x.id === j.id ? { ...x, capacity: val } : x))
-    );
-  }
-
-  async function clearAll() {
-    if (!confirm("Clear all judge assignments?")) return;
-    await saveAssignments(Object.fromEntries(judges.map((j) => [j.id, []])));
-  }
-
-  /** Balanced round-robin over the teams currently shown; replaces every judge's list. */
-  async function autoAssign() {
-    const orderTeams = [...filteredTeamsAll].sort((a, b) => a.name.localeCompare(b.name));
-    const assigned = balancedAssign(judges, orderTeams, requiredPerTeam);
-    await saveAssignments(Object.fromEntries(assigned.map((j) => [j.id, j.assignedTeamIds ?? []])));
-  }
-
-  function covBadge(teamId: string) {
-    const c = coverage[teamId] || 0;
-    const ok = c >= requiredPerTeam;
-    const cls = ok
-      ? "bg-green-500/10 text-green-700 dark:text-green-400"
-      : "bg-amber-500/10 text-amber-700 dark:text-amber-400";
+  if (s.rooms.length === 0) {
     return (
-      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${cls}`}>
-        {c}/{requiredPerTeam}
-      </span>
+      <div className="max-w-3xl">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Assignments</h1>
+        <div className={`${card} mt-6`}>
+          <p className="text-sm text-slate-300">Assignments follow rooms: the judges in a room judge every team scheduled into it. There are no rooms yet.</p>
+          <Link href="/admin/schedule" className="mt-4 inline-block rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-slate-200">Set up rooms</Link>
+        </div>
+      </div>
     );
-  }
-
-  function csvCell(s: string | number | null | undefined) {
-    const str = s == null ? "" : String(s);
-    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  }
-
-  function exportCsv() {
-    const js = filteredJudges;
-    const ts = filteredTeamsAll;
-
-    const lines: string[] = [];
-    const now = new Date().toISOString();
-
-    lines.push(`Event,${csvCell(EVENT_ID)}`);
-    lines.push(`Generated At,${csvCell(now)}`);
-    lines.push(`Required Judges Per Team,${csvCell(requiredPerTeam)}`);
-    lines.push("");
-
-    lines.push("Judges");
-    lines.push("JudgeId,JudgeName,AssignedCount,Capacity");
-    js.forEach((j) => {
-      lines.push(
-        [
-          csvCell(j.id),
-          csvCell(j.name),
-          csvCell(j.assignedTeamIds?.length || 0),
-          csvCell(j.capacity ?? "")
-        ].join(",")
-      );
-    });
-    lines.push("");
-
-    lines.push("Teams Coverage");
-    lines.push("TeamId,TeamName,Coverage,MeetsTarget");
-    ts.forEach((t) => {
-      const cov = coverage[t.id] || 0;
-      const ok = cov >= requiredPerTeam ? "yes" : "no";
-      lines.push(
-        [csvCell(t.id), csvCell(t.name), csvCell(cov), csvCell(ok)].join(",")
-      );
-    });
-    lines.push("");
-
-    lines.push("Assignment Matrix (1=assigned,0=not)");
-    const header = ["JudgeId/TeamId", ...ts.map((t) => t.id)];
-    lines.push(header.map(csvCell).join(","));
-    js.forEach((j) => {
-      const row = [
-        j.id,
-        ...ts.map((t) => ((j.assignedTeamIds || []).includes(t.id) ? 1 : 0))
-      ];
-      lines.push(row.map(csvCell).join(","));
-    });
-
-    const blob = new Blob([lines.join("\n")], {
-      type: "text/csv;charset=utf-8"
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${EVENT_ID}-assignments-${new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportJson() {
-    const js = filteredJudges.map((j) => ({
-      id: j.id,
-      name: j.name,
-      capacity: j.capacity ?? null,
-      assignedTeamIds: j.assignedTeamIds || []
-    }));
-    const ts = filteredTeamsAll.map((t) => ({
-      id: t.id,
-      name: t.name,
-      coverage: coverage[t.id] || 0
-    }));
-    const payload = {
-      eventId: EVENT_ID,
-      generatedAt: new Date().toISOString(),
-      requiredPerTeam,
-      judges: js,
-      teams: ts
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json;charset=utf-8"
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${EVENT_ID}-assignments-${new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="max-w-[min(1400px,100%)]">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="max-w-7xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Assign Judges</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Coverage target per team:
-            <input
-              type="number"
-              min={1}
-              className="ml-2 w-16 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-              value={requiredPerTeam}
-              onChange={(e) =>
-                setRequiredPerTeam(Math.max(1, Number(e.target.value || 1)))
-              }
-              title="Required judges per team (UI value; set the event default in Settings)"
-            />
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Assignments</h1>
+          <p className="mt-1 text-sm text-slate-400">By room. Judges are set on <Link href="/admin/schedule" className="underline">Schedule</Link>; moving a team here keeps its block where possible.</p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={autoAssign}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Auto-assign
-          </button>
-          <button
-            onClick={clearAll}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-white/10"
-          >
-            Clear all
-          </button>
-          <button
-            onClick={exportCsv}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-white/10"
-            title="Download the full judge x team assignment matrix as CSV"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={exportJson}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-white/10"
-            title="Download a structured JSON snapshot"
-          >
-            Export JSON
+        <div className="flex items-center gap-2">
+          <input className={`${select} h-8 w-44`} placeholder="Search teams" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <button className={btn} disabled={!free.length} onClick={() => setS(autoFill(s, teams))}>Auto-assign {free.length ? `(${free.length})` : ""}</button>
+          {dirty && <span className="text-xs text-amber-300">Unsaved</span>}
+          <button className={btn} disabled={!dirty || busy} onClick={() => setS(saved)}>Discard</button>
+          <button className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-50" disabled={!dirty || busy} onClick={save}>
+            {busy ? "Saving…" : "Save & publish"}
           </button>
         </div>
       </div>
+      {error && <div className="text-sm text-rose-300">{error}</div>}
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
+      {free.length > 0 && (
+        <section className={card}>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Unassigned · {free.length}</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {free.filter(matches).map((t) => (
+              <div key={t.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0b0b0c] px-2.5 py-1.5">
+                <span className="text-sm text-slate-100">{t.name}</span>
+                <select className={select} value="" onChange={(e) => e.target.value && setS(placeInRoom(s, t.id, e.target.value))}>
+                  <option value="">Assign to…</option>
+                  {s.rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <input
-          placeholder="Filter teams…"
-          value={filter.searchTeam}
-          onChange={(e) => {
-            setPage(0);
-            setFilter((f) => ({ ...f, searchTeam: e.target.value }));
-          }}
-          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-        />
-        <input
-          placeholder="Filter judges…"
-          value={filter.searchJudge}
-          onChange={(e) =>
-            setFilter((f) => ({ ...f, searchJudge: e.target.value }))
-          }
-          className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-        />
-        <div />
-
-        <div className="flex items-center justify-end gap-2">
-          <button
-            disabled={page <= 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="rounded-md border border-gray-200 px-2 py-1 text-xs disabled:opacity-50 dark:border-white/10"
-          >
-            Prev
-          </button>
-          <span className="text-xs">
-            {page + 1}/{totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            className="rounded-md border border-gray-200 px-2 py-1 text-xs disabled:opacity-50 dark:border-white/10"
-          >
-            Next
-          </button>
-        </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {s.rooms.map((r) => {
+          const rows = roomTeams(r.id);
+          const count = s.slots.filter((x) => x.roomId === r.id).length;
+          return (
+            <section key={r.id} className={card}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-50">{r.name}</h2>
+                  <p className="mt-0.5 text-xs text-slate-400">{r.judgeIds.length ? r.judgeIds.map(judgeName).join(", ") : "No judges"}{r.usher ? ` · usher ${r.usher}` : ""}</p>
+                </div>
+                <span className={`rounded-md px-2 py-0.5 text-xs ${r.judgeIds.length ? "bg-white/[0.06] text-slate-200" : "bg-amber-500/10 text-amber-300"}`}>{count} team{count === 1 ? "" : "s"}</span>
+              </div>
+              <ul className="mt-3 space-y-1.5">
+                {rows.map(({ slot, team }) => (
+                  <li key={team.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0b0b0c] px-2.5 py-1.5">
+                    <span className="w-16 shrink-0 text-[11px] uppercase tracking-wide text-slate-500">{blockLabel(slot.blockId)}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-100">{team.name}</span>
+                    <select className={select} value={r.id} onChange={(e) => setS(placeInRoom(s, team.id, e.target.value))} title="Move to another room">
+                      {s.rooms.map((rr) => <option key={rr.id} value={rr.id}>{rr.name}</option>)}
+                    </select>
+                    <button className="rounded px-1.5 text-slate-400 hover:text-slate-100" title="Unassign" onClick={() => setS(unplace(s, team.id))}>×</button>
+                  </li>
+                ))}
+                {rows.length === 0 && <li className="text-sm text-slate-500">{search ? "No matches." : "No teams yet."}</li>}
+              </ul>
+            </section>
+          );
+        })}
       </div>
 
-      <div className="mt-4 overflow-auto rounded-2xl border border-gray-200 dark:border-white/10">
-        <table className="min-w-full border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-white/5">
-            <tr>
-              <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-left dark:bg-white/5">
-                Judge
-              </th>
-              {pagedTeams.map((t) => (
-                <th key={t.id} className="px-3 py-2 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{t.name}</span>
-                    {covBadge(t.id)}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td className="px-4 py-6" colSpan={1 + pagedTeams.length}>
-                  Loading…
-                </td>
-              </tr>
-            )}
-
-            {!loading &&
-              filteredJudges.map((j) => (
-                <tr
-                  key={j.id}
-                  className="border-t border-gray-100 dark:border-white/10"
-                >
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2 dark:bg-gray-900">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{j.name}</span>
-                      <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-300">
-                        {j.assignedTeamIds?.length || 0}
-                        {j.capacity ? `/${j.capacity}` : ""}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs">
-                      <label className="opacity-70">Cap:</label>
-                      <input
-                        type="number"
-                        min={0}
-                        className="w-16 rounded-md border border-gray-200 px-2 py-0.5 text-xs dark:border-white/10 dark:bg-transparent"
-                        value={j.capacity ?? ""}
-                        onChange={(e) =>
-                          setCapacity(j, Number(e.target.value || 0))
-                        }
-                      />
-                      <button
-                        className="ml-auto rounded-md border border-gray-200 px-2 py-0.5 text-xs dark:border-white/10"
-                        onClick={() => bulkAssignToJudge(j.id)}
-                      >
-                        Fill
-                      </button>
-                    </div>
-                  </td>
-
-                  {pagedTeams.map((t) => {
-                    const on = (j.assignedTeamIds || []).includes(t.id);
-                    const cov = coverage[t.id] || 0;
-                    const wants = cov < requiredPerTeam;
-                    const cls = on
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : wants
-                      ? "border-amber-400"
-                      : "border-gray-200 dark:border-white/10";
-                    return (
-                      <td key={t.id} className="px-3 py-2">
-                        <button
-                          className={`w-9 rounded-md border px-0 py-1 text-xs ${cls}`}
-                          onClick={() => toggleJudgeTeam(j, t.id)}
-                          title={on ? "Unassign" : "Assign"}
-                        >
-                          {on ? "✓" : "+"}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-
-            {!loading && filteredJudges.length === 0 && (
-              <tr>
-                <td
-                  className="px-4 py-6 text-gray-500 dark:text-gray-400"
-                  colSpan={1 + pagedTeams.length}
-                >
-                  No judges match.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <p className="text-xs text-slate-500">
+        {s.slots.length} of {teams.length} teams assigned · {s.rooms.filter((r) => !r.judgeIds.length).length} room{s.rooms.filter((r) => !r.judgeIds.length).length === 1 ? "" : "s"} without judges
+        {teams.some((t) => slotOf(s, t.id) && !s.rooms.find((r) => r.id === slotOf(s, t.id)!.roomId)?.judgeIds.length) ? " · some teams sit in a room with no judges" : ""}
+      </p>
     </div>
   );
 }

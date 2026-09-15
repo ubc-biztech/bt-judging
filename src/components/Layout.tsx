@@ -84,7 +84,7 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Assignments",
           href: "/admin/assign",
-          hint: "Balance judge coverage",
+          hint: "Teams by room",
           icon: AdjustmentsHorizontalIcon,
           match: /^\/admin\/assign$/
         },

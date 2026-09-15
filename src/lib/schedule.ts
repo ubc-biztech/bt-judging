@@ -115,3 +115,13 @@ export function addMinutes(hhmm: string, minutes: number): string {
   const total = (Number(m[1]) * 60 + Number(m[2]) + minutes + 24 * 60) % (24 * 60);
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
+
+/** Put a team in a room at the earliest block where that room is free, adding a block at the end if none is. */
+export function placeInRoom(s: Schedule, teamId: string, roomId: string, minutesPerBlock = 15): Schedule {
+  const without = unplace(s, teamId);
+  const free = without.blocks.find((b) => slotAt(without, b.id, roomId).length === 0);
+  if (free) return place(without, teamId, free.id, roomId);
+  const last = without.blocks[without.blocks.length - 1];
+  const block = { id: newId("blk"), label: `Block ${without.blocks.length + 1}`, startsAt: last ? addMinutes(last.startsAt, minutesPerBlock) : "09:00" };
+  return place({ ...without, blocks: [...without.blocks, block] }, teamId, block.id, roomId);
+}
