@@ -84,3 +84,16 @@
 /* ─── Form controls: the pages rely on the dark ground for their fill ─── */
 input:not([type="checkbox"]):not([type="radio"]), select, textarea { background-color: var(--surface); color: var(--ink); }
 input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43, 127, 255, 0.2); }
+
+/* ─── Tinted stat cards and status chips, tuned for a dark ground ─── */
+.bg-emerald-400\/5, .bg-amber-400\/5, .bg-green-400\/5 { background-color: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06); }
+.border-emerald-300\/20, .border-emerald-300\/25, .border-emerald-500\/20, .border-amber-300\/20, .border-amber-300\/25, .border-green-400\/20, .border-rose-500\/20 { border-color: var(--line); }
+.text-emerald-300\/70 { color: #047857; }
+.text-amber-300\/70 { color: #b45309; }
+.bg-emerald-500\/10, .bg-green-500\/10, .bg-green-400\/10 { background-color: #e6f7ee; }
+.bg-amber-500\/10, .bg-amber-300\/10 { background-color: #fff3df; }
+.bg-rose-500\/10, .bg-rose-500\/15, .bg-rose-500\/20, .bg-red-500\/10 { background-color: #fde8ea; }
+.bg-cyan-300\/10, .bg-blue-500\/10, .bg-indigo-400\/10 { background-color: #e6f0ff; }
+.border-emerald-300\/30, .border-emerald-300\/40, .border-emerald-400\/30, .border-green-300\/40 { border-color: #9edbb8; }
+.border-amber-300\/30 { border-color: #f5cf8a; }
+.border-rose-300\/40, .border-red-500\/30 { border-color: #f3b3ba; }

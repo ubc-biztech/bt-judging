@@ -1,9 +1,9 @@
-export const DEFAULT_EVENT_ID = "hellohacks-2027";
-export const DEFAULT_EVENT_NAME = "HelloHacks 2027";
+export const DEFAULT_EVENT_ID = "hellohacks-2026";
+export const DEFAULT_EVENT_NAME = "HelloHacks 2026";
 
 /**
  * The event this deployment judges, as the BizTech API keys it: (slug, year).
- * NEXT_PUBLIC_EVENT_ID is `<slug>-<year>`, e.g. `hellohacks-2027`.
+ * NEXT_PUBLIC_EVENT_ID is `<slug>-<year>`, e.g. `hellohacks-2026`.
  */
 const raw = (process.env.NEXT_PUBLIC_EVENT_ID?.trim() || DEFAULT_EVENT_ID).toLowerCase();
 const m = /^(.*)-(\d{4})$/.exec(raw);

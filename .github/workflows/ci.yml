@@ -21,4 +21,4 @@ jobs:
       - run: npx tsc --noEmit -p tsconfig.json
       - run: npm run lint --if-present
       - run: npm run build
-        env: { NEXT_PUBLIC_EVENT_ID: hellohacks-2027 }
+        env: { NEXT_PUBLIC_EVENT_ID: hellohacks-2026 }

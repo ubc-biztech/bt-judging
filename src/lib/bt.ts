@@ -54,7 +54,7 @@ export const bt = createClient({
   getToken: () => (getSession()?.role === "admin" ? cognitoIdToken() : null)
 });
 
-/** This deployment's event: `bt.judging("hellohacks", 2027)`. */
+/** This deployment's event: `bt.judging("hellohacks", 2026)`. */
 export const judging = () => bt.judging(EVENT.id, EVENT.year);
 
 /** The same scope with an explicit code, for login (no session yet). */

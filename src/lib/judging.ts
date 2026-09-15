@@ -2,7 +2,7 @@ import type { Rubric } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
 
 export const OFFICIAL_JUDGING_RUBRIC: Rubric = {
-  name: "HelloHacks 2027 Judging Rubric",
+  name: "HelloHacks 2026 Judging Rubric",
   scaleMax: 30,
   scoreMode: "points",
   criteria: [

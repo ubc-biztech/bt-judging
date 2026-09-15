@@ -25,7 +25,7 @@ npm run dev
 
 | Variable | Meaning |
 |---|---|
-| `NEXT_PUBLIC_EVENT_ID` | `<slug>-<year>`, e.g. `hellohacks-2027`. Everything is scoped to this event. |
+| `NEXT_PUBLIC_EVENT_ID` | `<slug>-<year>`, e.g. `hellohacks-2026`. Everything is scoped to this event. |
 | `NEXT_PUBLIC_BT_API_URL` | Optional. Defaults to `https://api-dev.ubcbiztech.com`, or prod when `NEXT_PUBLIC_STAGE=production`. |
 | `NEXT_PUBLIC_COGNITO_*` | Optional. The Cognito pool organizers sign in to. Defaults to the main app's pool. |
 
