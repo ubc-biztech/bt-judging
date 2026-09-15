@@ -216,6 +216,8 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
   ]
 };
 
+const AVATAR: Record<Role, string> = { admin: "/org-avatar.svg", judge: "/judge-avatar.svg", team: "/default-avatar.svg", guest: "/default-avatar.svg" };
+
 function roleFromSession(session: Session | null): Role {
   return session?.role ?? "guest";
 }
@@ -362,7 +364,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className={["mt-6 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
         <div className="flex items-center gap-3">
-          <img src="/avatar.svg" alt="" className="size-9 shrink-0 rounded-full" />
+          <img src={AVATAR[role]} alt="" className="size-9 shrink-0 rounded-full" />
           <div>
             <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
               Signed In
