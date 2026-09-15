@@ -12,7 +12,7 @@
   "dependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
-    "@ubc-biztech/sdk": "github:ubc-biztech/sdk#1e7354c",
+    "@ubc-biztech/sdk": "github:ubc-biztech/sdk#2a5b96c",
     "aws-amplify": "^6.20.0",
     "classnames": "^2.5.1",
     "next": "15.5.9",

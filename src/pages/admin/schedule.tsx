@@ -6,6 +6,7 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import type { Judge, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import { eventOrEmpty, saveEvent, errorMessage } from "@/lib/bt";
+import { getSession } from "@/lib/session";
 import { EMPTY_SCHEDULE, addMinutes, assignmentsFrom, autoFill, delay, describeChanges, newId, place, slotAt, unplace, unscheduled, withChanges, type Schedule } from "@/lib/schedule";
 
 export default dynamic(() => Promise.resolve(() => (
@@ -82,7 +83,7 @@ function Page() {
     setBusy(true);
     setError("");
     try {
-      const next = withChanges(s, describeChanges(saved, s, teams));
+      const next = withChanges(s, describeChanges(saved, s, teams), getSession()?.id);
       const doc = await saveEvent((d) => ({ ...d, settings: { ...d.settings, schedule: next }, judges: assignmentsFrom(next, d.judges) }));
       const stored = doc.settings.schedule ?? EMPTY_SCHEDULE;
       setSaved(stored);
@@ -252,6 +253,7 @@ function Page() {
             <li key={i} className="flex gap-3 text-slate-300">
               <span className="shrink-0 font-mono text-xs text-slate-500">{new Date(c.at).toLocaleString()}</span>
               <span>{c.message}</span>
+              {c.by && <span className="ml-auto shrink-0 text-xs text-slate-500">{c.by}</span>}
             </li>
           ))}
           {saved.changes.length === 0 && <li className="text-slate-500">Nothing yet. Every save logs what moved.</li>}

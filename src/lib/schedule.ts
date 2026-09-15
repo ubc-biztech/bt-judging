@@ -59,10 +59,10 @@ export function describeChanges(before: Schedule, after: Schedule, teams: Pick<J
   return out;
 }
 
-export function withChanges(s: Schedule, messages: string[]): Schedule {
+export function withChanges(s: Schedule, messages: string[], by?: string): Schedule {
   if (!messages.length) return s;
   const at = new Date().toISOString();
-  return { ...s, changes: [...messages.map((message) => ({ at, message })), ...s.changes].slice(0, 200) };
+  return { ...s, changes: [...messages.map((message) => ({ at, message, by })), ...s.changes].slice(0, 200) };
 }
 
 /** Move a team to a block and room; the team's previous slot is dropped. */
