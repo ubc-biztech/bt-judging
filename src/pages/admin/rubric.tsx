@@ -100,31 +100,15 @@ function Page() {
             </>
           )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="ux-label">
-            Rubric name
-            <input
-              className="ux-input"
-              required
-              value={rubric.name}
-              onChange={(e) => setRubric({ ...rubric, name: e.target.value })}
-            />
-          </label>
-          <label className="ux-label">
-            Default maximum score
-            <input
-              className="ux-input"
-              type="number"
-              min={1}
-              step={1}
-              required
-              value={rubric.scaleMax}
-              onChange={(e) =>
-                setRubric({ ...rubric, scaleMax: Number(e.target.value) })
-              }
-            />
-          </label>
-        </div>
+        <label className="ux-label">
+          Rubric name
+          <input
+            className="ux-input"
+            required
+            value={rubric.name}
+            onChange={(e) => setRubric({ ...rubric, name: e.target.value })}
+          />
+        </label>
         {rubric.criteria.map((c, i) => (
           <section
             key={c.id}
