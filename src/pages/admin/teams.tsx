@@ -95,7 +95,7 @@ function Page() {
   }
 
   async function applyPreset() {
-    if (document.querySelector('tbody [data-unsaved="true"]'))
+    if (document.querySelector('[data-editable-record][data-unsaved="true"]'))
       return setError("Save or discard row edits before replacing all codes.");
     if (
       !confirm(
@@ -269,7 +269,7 @@ function Page() {
           className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center"
         >
           <input
-            className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
+            className="min-h-11 w-full min-w-0 xl:flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
             aria-label="Team name"
             required
             placeholder="Team Name"
@@ -277,7 +277,7 @@ function Page() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
           <input
-            className="h-11 min-w-0 flex-[1.2] rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
+            className="min-h-11 w-full min-w-0 xl:flex-[1.2] rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
             aria-label="Members (comma-separated)"
             placeholder="Members (comma-separated)"
             value={form.members}
@@ -300,7 +300,7 @@ function Page() {
           </p>
         </div>
         <select
-          className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
+          className="min-h-10 max-w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
           aria-label="Team code preset"
           value={preset}
           onChange={(e) => setPreset(e.target.value as TeamCodePreset)}
@@ -314,53 +314,28 @@ function Page() {
         <button
           onClick={applyPreset}
           disabled={list.length === 0}
-          className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
+          className="min-h-10 max-w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
         >
           Apply to all teams
         </button>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2 text-left">Team</th>
-              <th className="px-4 py-2 text-left">Members</th>
-              <th className="px-4 py-2 text-left">Team Code</th>
-              <th className="px-4 py-2 text-left">Links</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td className="px-4 py-4" colSpan={5}>
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              list.map((t) => (
-                <EditableTeamRow
-                  key={t.id}
-                  t={t}
-                  onSave={saveTeam}
-                  onDelete={removeTeam}
-                />
-              ))}
-            {!loading && list.length === 0 && (
-              <tr>
-                <td
-                  className="px-4 py-4 text-gray-500 dark:text-gray-400"
-                  colSpan={5}
-                >
-                  No teams yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <section
+        aria-label="Teams"
+        className="mt-6 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] bg-[var(--surface)]"
+      >
+        {list.map((t) => (
+          <EditableTeamRow
+            key={t.id}
+            t={t}
+            onSave={saveTeam}
+            onDelete={removeTeam}
+          />
+        ))}
+        {!list.length && (
+          <p className="p-5 text-sm text-[var(--ink-3)]">No teams yet.</p>
+        )}
+      </section>
     </fieldset>
   );
 }
@@ -396,29 +371,46 @@ function EditableTeamRow({
   }
 
   return (
-    <tr
+    <article
+      data-editable-record
       data-unsaved={dirty}
-      className="align-top border-t border-gray-100 dark:border-white/10"
+      aria-label={t.name}
+      className="min-w-0 space-y-4 p-4 sm:p-5"
     >
-      <td className="px-4 py-3">
-        <input
-          className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-          aria-label={`Name for ${t.name}`}
-          value={edit.name}
-          onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-        />
-      </td>
-
-      <td className="px-4 py-3">
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="ux-label">
+          Team name
+          <input
+            className="ux-input"
+            aria-label={`Name for ${t.name}`}
+            value={edit.name}
+            onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+          />
+        </label>
+        <label className="ux-label">
+          Access code
+          <input
+            className="ux-input font-mono"
+            aria-label={`Code for ${t.name}`}
+            value={edit.code ?? ""}
+            onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+            onBlur={(e) =>
+              setEdit({ ...edit, code: normalizeCode(e.target.value) })
+            }
+          />
+        </label>
+      </div>
+      <div>
+        <p className="mb-2 text-sm font-medium">Members</p>
         <div className="flex flex-wrap gap-2">
           {(edit.members || []).map((m, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-white/10"
+              className="inline-flex max-w-full items-center gap-2 rounded-md border border-[var(--line)] pl-3 text-sm"
             >
-              {m}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{m}</span>
               <button
-                className="text-gray-500 hover:text-rose-600"
+                className="min-h-10 min-w-10 shrink-0 text-[var(--ink-3)] hover:text-rose-600"
                 aria-label={`Remove ${m}`}
                 onClick={() => removeMember(i)}
               >
@@ -427,9 +419,9 @@ function EditableTeamRow({
             </span>
           ))}
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <input
-            className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
+            className="ux-input !w-auto min-w-0 flex-[1_1_12rem]"
             aria-label={`Add member to ${t.name}`}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -437,102 +429,95 @@ function EditableTeamRow({
                 addMember();
               }
             }}
-            placeholder="Add member"
+            placeholder="Member name"
             value={member}
             onChange={(e) => setMember(e.target.value)}
           />
           <button
+            className="ux-secondary"
+            disabled={!member.trim()}
             onClick={addMember}
-            className="rounded-md border border-gray-200 px-2 text-xs dark:border-white/10"
           >
-            Add
+            Add member
           </button>
         </div>
-      </td>
-
-      <td className="px-4 py-3">
-        <input
-          className="w-40 rounded-md border border-gray-200 px-2 py-1 font-mono text-sm tracking-wider dark:border-white/10 dark:bg-transparent"
-          aria-label={`Code for ${t.name}`}
-          value={edit.code ?? ""}
-          onChange={(e) => setEdit({ ...edit, code: e.target.value })}
-          onBlur={(e) =>
-            setEdit({ ...edit, code: normalizeCode(e.target.value) })
-          }
-        />
-      </td>
-
-      <td className="px-4 py-3">
-        <div className="grid gap-2">
-          <input
-            className="w-56 rounded-md border border-gray-200 px-2 py-1 text-xs font-mono dark:border-white/10 dark:bg-transparent"
-            aria-label={`GitHub for ${t.name}`}
-            placeholder="GitHub URL"
-            value={edit.github || ""}
-            onChange={(e) => setEdit({ ...edit, github: e.target.value })}
-          />
-          <input
-            className="w-56 rounded-md border border-gray-200 px-2 py-1 text-xs font-mono dark:border-white/10 dark:bg-transparent"
-            aria-label={`Devpost for ${t.name}`}
-            placeholder="Devpost URL"
-            value={edit.devpost || ""}
-            onChange={(e) => setEdit({ ...edit, devpost: e.target.value })}
-          />
-          <textarea
-            className="w-56 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-white/10 dark:bg-transparent"
-            aria-label={`Description for ${t.name}`}
-            placeholder="Description"
-            rows={3}
-            value={edit.description || ""}
-            onChange={(e) => setEdit({ ...edit, description: e.target.value })}
-          />
-        </div>
-      </td>
-
-      <td className="px-4 py-3">
-        <div className="flex flex-col gap-2">
-          <Link
-            href={`/admin/teams/${t.id}`}
-            className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-center dark:border-white/10"
-          >
-            View
-          </Link>
-          <button
-            className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
-            disabled={!dirty}
-            onClick={() => {
-              const m = member.trim();
-              void onSave(
-                m ? { ...edit, members: [...edit.members, m] } : edit,
-              );
-              if (m) {
-                setEdit({ ...edit, members: [...edit.members, m] });
-                setMember("");
+      </div>
+      <details className="rounded-lg border border-[var(--line)] p-3">
+        <summary className="text-sm font-medium">
+          Project links & description
+        </summary>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="ux-label">
+            GitHub URL
+            <input
+              className="ux-input"
+              aria-label={`GitHub for ${t.name}`}
+              placeholder="https://github.com/…"
+              value={edit.github || ""}
+              onChange={(e) => setEdit({ ...edit, github: e.target.value })}
+            />
+          </label>
+          <label className="ux-label">
+            Devpost URL
+            <input
+              className="ux-input"
+              aria-label={`Devpost for ${t.name}`}
+              placeholder="https://devpost.com/…"
+              value={edit.devpost || ""}
+              onChange={(e) => setEdit({ ...edit, devpost: e.target.value })}
+            />
+          </label>
+          <label className="ux-label md:col-span-2">
+            Description
+            <textarea
+              className="ux-input resize-y"
+              aria-label={`Description for ${t.name}`}
+              rows={3}
+              value={edit.description || ""}
+              onChange={(e) =>
+                setEdit({ ...edit, description: e.target.value })
               }
+            />
+          </label>
+        </div>
+      </details>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          className="ux-primary"
+          disabled={!dirty}
+          onClick={() => {
+            const m = member.trim();
+            void onSave(m ? { ...edit, members: [...edit.members, m] } : edit);
+            if (m) {
+              setEdit({ ...edit, members: [...edit.members, m] });
+              setMember("");
+            }
+          }}
+        >
+          Save Changes
+        </button>
+        {dirty && (
+          <button
+            className="ux-secondary"
+            onClick={() => {
+              setEdit(t);
+              setMember("");
             }}
           >
-            Save Changes
+            Discard
           </button>
-          <CopyButton value={t.code ?? ""} />
-          {dirty && (
-            <button
-              onClick={() => {
-                setEdit(t);
-                setMember("");
-              }}
-              className="text-xs underline"
-            >
-              Discard
-            </button>
-          )}
-          <button
-            className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-            onClick={() => onDelete(edit)}
-          >
-            Delete
-          </button>
-        </div>
-      </td>
-    </tr>
+        )}
+        <Link href={`/admin/teams/${t.id}`} className="ux-secondary">
+          View team
+        </Link>
+        <CopyButton value={t.code ?? ""} label="Copy code" />
+        <button
+          className="ux-secondary !text-rose-600 sm:ml-auto"
+          onClick={() => onDelete(edit)}
+        >
+          Delete team
+        </button>
+      </div>
+    </article>
   );
 }

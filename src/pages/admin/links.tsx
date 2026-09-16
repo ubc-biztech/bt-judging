@@ -125,57 +125,32 @@ function Page() {
       </form>
       <Status error={error} notice={notice} />
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2 text-left">Order</th>
-              <th className="px-4 py-2 text-left">Label</th>
-              <th className="px-4 py-2 text-left">URL</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {links.map((l, i) => (
-              <tr
-                key={l.id}
-                className="border-t border-gray-100 dark:border-white/10"
+      <ol className="mt-6 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] bg-[var(--surface)]">
+        {links.map((l) => (
+          <li key={l.id} className="flex flex-wrap items-start gap-3 p-4">
+            <div className="min-w-0 flex-[1_1_16rem]">
+              <p className="font-medium">{l.label}</p>
+              <a
+                className="mt-1 block text-sm text-[var(--blue)] underline [overflow-wrap:anywhere]"
+                href={l.url}
+                target="_blank"
+                rel="noreferrer"
               >
-                <td className="px-4 py-2">{i + 1}</td>
-                <td className="px-4 py-2">{l.label}</td>
-                <td className="px-4 py-2">
-                  <a
-                    className="text-indigo-600 underline"
-                    href={l.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {l.url}
-                  </a>
-                </td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => removeLink(l.id)}
-                    className="rounded-md bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {links.length === 0 && (
-              <tr>
-                <td
-                  className="px-4 py-4 text-gray-500 dark:text-gray-400"
-                  colSpan={4}
-                >
-                  No links yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                {l.url}
+              </a>
+            </div>
+            <button
+              className="ux-secondary !text-rose-600"
+              onClick={() => removeLink(l.id)}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+        {!links.length && (
+          <li className="p-4 text-sm text-[var(--ink-3)]">No links yet.</li>
+        )}
+      </ol>
     </fieldset>
   );
 }

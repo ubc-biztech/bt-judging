@@ -125,7 +125,7 @@ function Page() {
         )}
       </div>
 
-      <div className="mt-4 inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
+      <div className="mt-4 inline-flex max-w-full flex-wrap rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
         {(["prelim", "finals"] as const).map((t) => (
           <button
             key={t}
@@ -151,73 +151,64 @@ function Page() {
             No feedback yet for this round.
           </div>
         ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-white/5">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Judge</th>
-                    {crits.map((c) => (
-                      <th key={c.id} className="px-3 py-2 text-left">
-                        {c.label}
-                        <div className="text-[10px] text-gray-500">
-                          {!pointTotals && `Weight ${c.weight} · `}Max{" "}
-                          {criterionMax(c)}
-                        </div>
-                      </th>
-                    ))}
-                    {!pointTotals && (
-                      <th className="px-3 py-2 text-left">Raw total</th>
-                    )}
-                    <th className="px-3 py-2 text-left">
-                      {pointTotals ? "Score Total" : "Weighted Total"}
-                    </th>
-                    <th className="px-3 py-2 text-left">Feedback</th>
-                    <th className="px-3 py-2 text-left">Submitted</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-t border-gray-100 dark:border-white/10 align-top"
+          <div className="space-y-6">
+            {sorted.map((r) => (
+              <article
+                key={r.id}
+                className="min-w-0 border-b border-[var(--line)] pb-6 last:border-0 last:pb-0"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold">{r.judgeName || "Judge"}</h2>
+                    <p className="mt-1 text-xs text-[var(--ink-3)]">
+                      {r.completedAt
+                        ? new Date(r.completedAt).toLocaleString()
+                        : "Submission time unavailable"}
+                    </p>
+                  </div>
+                  <p className="font-semibold">
+                    {pointTotals ? "Score total" : "Weighted total"}:{" "}
+                    {Number(
+                      pointTotals ? r.total : r.weightedTotal || 0,
+                    ).toFixed(2)}
+                  </p>
+                </div>
+                <dl className="my-4 grid gap-3 sm:grid-cols-2">
+                  {crits.map((c) => (
+                    <div
+                      key={c.id}
+                      className="min-w-0 flex items-start justify-between gap-3 rounded-lg bg-[var(--paper)] p-3"
                     >
-                      <td className="px-3 py-2">
-                        {r.judgeName || r.judgeId || "Judge"}
-                      </td>
-                      {crits.map((c) => (
-                        <td key={c.id} className="px-3 py-2">
-                          {typeof r.scores?.[c.id] === "number"
-                            ? r.scores![c.id]
-                            : "—"}
-                        </td>
-                      ))}
-                      {!pointTotals && (
-                        <td className="px-3 py-2">
-                          {Number(r.total || 0).toFixed(2)}
-                        </td>
-                      )}
-                      <td className="px-3 py-2">
-                        {Number(
-                          pointTotals ? r.total : r.weightedTotal || 0,
-                        ).toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed text-gray-800 dark:text-gray-100 border border-gray-200/70 dark:border-white/10 rounded-md px-2 py-1 bg-gray-50/70 dark:bg-white/5">
-                          {r.feedback || "—"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        {r.completedAt
-                          ? new Date(r.completedAt).toLocaleString()
-                          : "—"}
-                      </td>
-                    </tr>
+                      <dt className="min-w-0">
+                        {c.label}
+                        {!pointTotals && (
+                          <span className="mt-1 block text-xs text-[var(--ink-3)]">
+                            Weight {c.weight}
+                          </span>
+                        )}
+                      </dt>
+                      <dd className="shrink-0 font-medium">
+                        {typeof r.scores?.[c.id] === "number"
+                          ? r.scores[c.id]
+                          : "—"}{" "}
+                        / {criterionMax(c)}
+                      </dd>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+                  {!pointTotals && (
+                    <div className="flex flex-wrap justify-between gap-3 p-3">
+                      <dt>Raw total</dt>
+                      <dd>{Number(r.total || 0).toFixed(2)}</dd>
+                    </div>
+                  )}
+                </dl>
+                <h3 className="mb-2 font-medium">Feedback</h3>
+                <p className="whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">
+                  {r.feedback || "No written feedback."}
+                </p>
+              </article>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,6 @@
-// pages/results.tsx
 "use client";
+
+import TableScroll from "@/components/TableScroll";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
@@ -348,8 +349,11 @@ export default function Results() {
           </p>
         )}
         {/* Leaderboard */}
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
-          <table className="min-w-full text-sm">
+        <TableScroll
+          label="Team results"
+          className="mt-6 rounded-xl border border-[var(--line)] p-2"
+        >
+          <table className="min-w-full text-sm [&_th]:min-w-32">
             <thead className="bg-gray-50 dark:bg-white/5">
               <tr>
                 <th className="px-4 py-2 text-left">Rank</th>
@@ -436,7 +440,7 @@ export default function Results() {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
 
         {/* Expanded per-team details with per-criterion columns */}
         {expanded && canShowDetails && (
@@ -496,8 +500,8 @@ function Details({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-xs">
+      <TableScroll label="Judge reviews">
+        <table className="min-w-full text-xs [&_th]:min-w-32">
           <thead className="bg-gray-50 dark:bg-white/5">
             <tr>
               <th className="px-3 py-2 text-left">Judge</th>
@@ -569,7 +573,7 @@ function Details({
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </div>
   );
 }

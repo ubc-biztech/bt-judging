@@ -50,7 +50,7 @@ export function CopyButton({
       <button
         type="button"
         disabled={!value}
-        className="rounded-md border border-gray-200 px-2 py-1 text-xs disabled:opacity-50"
+        className="ux-secondary disabled:opacity-50"
         aria-live="polite"
         onClick={async () => {
           try {

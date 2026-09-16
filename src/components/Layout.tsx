@@ -358,17 +358,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const accountLabel = useMemo(() => roleDisplayName(session), [session]);
 
   const SidebarItems = ({ mobile = false }: { mobile?: boolean }) => (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full min-h-0 w-full flex-col [overflow-wrap:anywhere]">
       <div
         className={[
-          "flex items-center justify-between border-b border-white/[0.08]",
+          "flex shrink-0 items-center justify-between border-b border-white/[0.08]",
           mobile ? "gap-2 pb-4 pr-3" : "gap-3 pb-5",
         ].join(" ")}
       >
         <Link
           href={homeHrefForRole(role)}
           onClick={() => mobile && setSidebarOpen(false)}
-          className="inline-flex items-center"
+          className="inline-flex min-w-0 items-center"
         >
           <div>
             <img src="/hh.svg" alt="HelloHacks" className="mb-2 h-10 w-auto" />
@@ -383,7 +383,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {mobile && (
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-md border border-white/10 p-1.5 text-slate-300 hover:bg-white/5"
+            className="shrink-0 rounded-md border border-white/10 p-1.5 text-slate-300 hover:bg-white/5"
           >
             <span className="sr-only">Close menu</span>
             <XMarkIcon className="size-5" aria-hidden="true" />
@@ -391,7 +391,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         )}
       </div>
 
-      <div className="mt-6 flex-1 space-y-6 overflow-y-auto">
+      <div className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
         {sections.map((section) => (
           <div key={section.name}>
             <p
@@ -426,7 +426,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                             : "text-slate-500 group-hover:text-slate-200",
                         ].join(" ")}
                       />
-                      <span className="block min-w-0 truncate text-sm font-medium">
+                      <span className="block min-w-0 text-sm font-medium">
                         {item.name}
                       </span>
                     </Link>
@@ -436,27 +436,27 @@ export default function Layout({ children }: { children: ReactNode }) {
             </ul>
           </div>
         ))}
-      </div>
 
-      {!!event?.links.length && (
-        <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
-          <p className="text-xs text-slate-500">Event links</p>
-          {event.links.map((link) => (
-            <a
-              key={link.id}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-sm text-slate-300 hover:text-white"
-            >
-              {link.label} ↗
-            </a>
-          ))}
-        </div>
-      )}
+        {!!event?.links.length && (
+          <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
+            <p className="text-xs text-slate-500">Event links</p>
+            {event.links.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block text-sm text-slate-300 hover:text-white"
+              >
+                {link.label} ↗
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
       <div
         className={[
-          "mt-6 flex items-center gap-3 border-t border-white/[0.08] pt-5",
+          "mt-6 flex shrink-0 items-center gap-3 border-t border-white/[0.08] pt-5",
           mobile ? "pr-3" : "",
         ].join(" ")}
       >
@@ -488,7 +488,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[#050505] text-slate-100">
+    <div className="relative min-h-dvh bg-[#050505] text-slate-100">
       <div className="pointer-events-none absolute inset-0"></div>
 
       <Dialog
@@ -520,8 +520,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       </Dialog>
 
       <div className="hidden xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:flex xl:w-[18.5rem] xl:flex-col">
-        <div className="flex grow border-r border-white/10 bg-[#0b0b0c]/94 px-5 py-6 shadow-[18px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-          <div className="w-full">
+        <div className="flex min-h-0 grow border-r border-white/10 bg-[#0b0b0c]/94 px-5 py-6 shadow-[18px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+          <div className="h-full min-h-0 w-full">
             <SidebarItems />
           </div>
         </div>
@@ -548,7 +548,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
-        <main className="mx-auto max-w-7xl px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8">
+        <main className="mx-auto min-w-0 max-w-7xl [overflow-wrap:anywhere] px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8">
           {role === "admin" && settings && path !== "/admin" && (
             <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
               <span>

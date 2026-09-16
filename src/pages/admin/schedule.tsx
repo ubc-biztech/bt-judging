@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
+import TableScroll from "@/components/TableScroll";
 import RoleGate from "@/components/RoleGate";
 import type { Judge, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import { eventOrEmpty, saveEvent, errorMessage } from "@/lib/bt";
@@ -607,12 +608,7 @@ function Page() {
             </label>
           )}
         </div>
-        <div
-          className="mt-3 overflow-x-auto"
-          tabIndex={0}
-          role="region"
-          aria-label="Schedule grid"
-        >
+        <TableScroll className="mt-3" label="Schedule grid">
           <table className="min-w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
@@ -711,7 +707,7 @@ function Page() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         {(!s.rooms.length || !s.blocks.length) && (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
             <span>

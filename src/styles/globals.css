@@ -36,6 +36,9 @@ body {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 .ux-primary {
   background: var(--blue);
@@ -56,6 +59,8 @@ fieldset:disabled {
 }
 .ux-input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -64,6 +69,7 @@ fieldset:disabled {
 }
 .ux-label {
   display: grid;
+  min-width: 0;
   gap: 6px;
   font-size: 14px;
   font-weight: 500;
@@ -84,4 +90,12 @@ summary:focus-visible {
 }
 fieldset {
   min-width: 0;
+}
+
+/* Native controls must shrink with their grid column at narrow widths and zoom. */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
 }
