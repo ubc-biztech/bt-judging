@@ -6,7 +6,14 @@ import {
   withoutJudge,
   withoutTeam,
 } from "../src/lib/ux";
-import { assignmentsFrom, excludeFromBlock } from "../src/lib/schedule";
+import {
+  assignmentsFrom,
+  excludeFromBlock,
+  place,
+  unplace,
+  autoFill,
+  scheduleErrors,
+} from "../src/lib/schedule";
 import { presetCodes, presetTeamCodes } from "../src/lib/codes";
 import type { JudgingAdminSetInput } from "@ubc-biztech/sdk";
 
@@ -120,6 +127,82 @@ assert.match(
 assert.match(submissionError("", "", ["javascript:alert(1)"], 2), /full URL/);
 console.log(
   "PASS phase prerequisites, setup readiness, removal cleanup, persistent assignment resets, code collisions, and submission validation",
+);
+
+// Scheduling must never overwrite a team or double-book a room.
+const scheduled = event.settings.schedule!;
+const twoTeams = [
+  ...event.teams.map((t) => ({ ...t, id: t.id! })),
+  { id: "t2", name: "Team Two", members: [] },
+];
+assert.throws(() => place(scheduled, "t2", "b1", "r1"), /occupied/);
+assert.throws(() => place(scheduled, "t2", "missing", "r1"), /existing/);
+assert.equal(scheduled.slots[0].teamId, "t1");
+const filled = autoFill(scheduled, twoTeams, 20);
+assert.equal(filled.blocks.length, 2);
+assert.equal(filled.blocks[1].startsAt, "10:20");
+assert.deepEqual(filled.slots[0], scheduled.slots[0]);
+assert.deepEqual(scheduleErrors(filled, twoTeams, event.judges), []);
+assert.deepEqual(
+  assignmentsFrom(unplace(filled, "t1"), event.judges)[0].assignedTeamIds,
+  ["t2"],
+);
+assert.match(
+  scheduleErrors(filled, event.teams, event.judges).join(" "),
+  /removed/,
+);
+const doubleBooked = {
+  ...filled,
+  rooms: [...filled.rooms, { id: "r2", name: "Second room", judgeIds: ["j1"] }],
+  slots: [scheduled.slots[0], { teamId: "t2", blockId: "b1", roomId: "r2" }],
+};
+assert.match(
+  scheduleErrors(doubleBooked, twoTeams, event.judges).join(" "),
+  /two rooms/,
+);
+assert.deepEqual(
+  scheduleErrors(
+    {
+      ...doubleBooked,
+      rooms: doubleBooked.rooms.map((r) =>
+        r.id === "r2" ? { ...r, judgeIds: ["j1", "j2"] } : r,
+      ),
+      exclusions: [{ judgeId: "j1", teamId: "t2" }],
+    },
+    twoTeams,
+    [...event.judges, { id: "j2", name: "Second judge" }],
+  ),
+  [],
+);
+assert.match(
+  scheduleErrors(
+    { ...filled, slots: [...filled.slots, filled.slots[0]] },
+    twoTeams,
+    event.judges,
+  ).join(" "),
+  /more than once/,
+);
+assert.match(
+  scheduleErrors(
+    {
+      ...filled,
+      blocks: filled.blocks.map((b) => ({ ...b, startsAt: "10:00" })),
+    },
+    twoTeams,
+    event.judges,
+  ).join(" "),
+  /different start times/,
+);
+assert.match(
+  scheduleErrors(
+    { ...filled, rooms: filled.rooms.map((r) => ({ ...r, judgeIds: [] })) },
+    twoTeams,
+    event.judges,
+  ).join(" "),
+  /no judges/,
+);
+console.log(
+  "PASS occupied-slot guard, auto-fill preservation, unscheduling assignments, stale data, duplicate teams/times, and judge conflicts including exclusions",
 );
 
 const many = presetCodes(

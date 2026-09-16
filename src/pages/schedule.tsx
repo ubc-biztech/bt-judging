@@ -7,7 +7,7 @@ import RoleGate from "@/components/RoleGate";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import { errorMessage, eventOrEmpty } from "@/lib/bt";
-import { EMPTY_SCHEDULE, isExcluded, slotAt } from "@/lib/schedule";
+import { EMPTY_SCHEDULE, isExcluded, slotAt, slotOf } from "@/lib/schedule";
 
 export default dynamic(
   () =>
@@ -40,6 +40,7 @@ function Page() {
       !isExcluded(s, session.id, teamId) &&
       s.rooms.find((r) => r.id === roomId)?.judgeIds.includes(session.id)) ||
     (session?.role === "team" && teamId === session.id);
+  const mySlot = session?.role === "team" ? slotOf(s, session.id) : undefined;
 
   return (
     <div className="max-w-7xl">
@@ -48,7 +49,9 @@ function Page() {
       </h1>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-400">
-          Live schedule · Your slots are highlighted.
+          {session?.role === "admin"
+            ? "Published schedule"
+            : "Live schedule · Your slots are highlighted."}
         </p>
         <a
           href="/schedule/board"
@@ -64,6 +67,21 @@ function Page() {
         error={error ? errorMessage(error) : ""}
         onRetry={refresh}
       />
+      {doc && !error && session?.role === "team" && (
+        <p className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm">
+          {mySlot ? (
+            <>
+              Your presentation:{" "}
+              <strong>
+                {s.blocks.find((b) => b.id === mySlot.blockId)?.startsAt} ·{" "}
+                {s.rooms.find((r) => r.id === mySlot.roomId)?.name}
+              </strong>
+            </>
+          ) : (
+            "Your team does not have a time slot yet. Check with an organizer."
+          )}
+        </p>
+      )}
       <div className="mt-6 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead>
