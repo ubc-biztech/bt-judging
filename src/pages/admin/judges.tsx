@@ -136,7 +136,7 @@ function Page() {
   }
 
   async function applyPreset() {
-    if (document.querySelector('tbody [data-unsaved="true"]'))
+    if (document.querySelector('[data-editable-record][data-unsaved="true"]'))
       return setError("Save or discard row edits before replacing all codes.");
     if (
       !confirm(
@@ -258,7 +258,7 @@ function Page() {
           </p>
         </div>
         <select
-          className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
+          className="min-h-10 max-w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
           value={preset}
           aria-label="Judge code preset"
           disabled={creating}
@@ -273,52 +273,29 @@ function Page() {
         <button
           onClick={applyPreset}
           disabled={list.length === 0}
-          className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
+          className="min-h-10 max-w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
         >
           Apply to all judges
         </button>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-white/5">
-            <tr>
-              <th className="px-4 py-2 text-left">Name</th>
-              <th className="px-4 py-2 text-left">Code</th>
-              <th className="px-4 py-2 text-left">Assigned</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td className="px-4 py-4" colSpan={4}>
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {list.map((j) => (
-              <Row
-                key={j.id}
-                j={j}
-                onSave={saveJudge}
-                onReset={resetAssignments}
-                onDelete={removeJudge}
-              />
-            ))}
-            {list.length === 0 && (
-              <tr>
-                <td
-                  className="px-4 py-4 text-gray-500 dark:text-gray-400"
-                  colSpan={4}
-                >
-                  No judges yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <section
+        aria-label="Judges"
+        className="mt-6 divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] bg-[var(--surface)]"
+      >
+        {list.map((j) => (
+          <Row
+            key={j.id}
+            j={j}
+            onSave={saveJudge}
+            onReset={resetAssignments}
+            onDelete={removeJudge}
+          />
+        ))}
+        {!list.length && (
+          <p className="p-5 text-sm text-[var(--ink-3)]">No judges yet.</p>
+        )}
+      </section>
     </fieldset>
   );
 }
@@ -341,66 +318,69 @@ function Row({
   }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = edit.name !== j.name || edit.code !== j.code;
   return (
-    <tr
+    <article
+      data-editable-record
       data-unsaved={dirty}
-      className="border-t border-gray-100 dark:border-white/10"
+      aria-label={j.name}
+      className="min-w-0 space-y-4 p-4 sm:p-5"
     >
-      <td className="px-4 py-2">
-        <input
-          className="w-full min-w-40 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-          aria-label={`Name for ${j.name}`}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void onSave(edit);
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="ux-label">
+          Judge name
+          <input
+            className="ux-input"
+            aria-label={`Name for ${j.name}`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void onSave(edit);
+              }
+            }}
+            value={edit.name}
+            onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+          />
+        </label>
+        <label className="ux-label">
+          Access code
+          <input
+            className="ux-input font-mono"
+            aria-label={`Code for ${j.name}`}
+            value={edit.code ?? ""}
+            onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+            onBlur={(e) =>
+              setEdit({ ...edit, code: normalizeCode(e.target.value) })
             }
-          }}
-          value={edit.name}
-          onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-        />
-      </td>
-      <td className="px-4 py-2">
-        <input
-          className="w-40 rounded-md border border-gray-200 px-2 py-1 font-mono text-sm tracking-wider dark:border-white/10 dark:bg-transparent"
-          aria-label={`Code for ${j.name}`}
-          value={edit.code ?? ""}
-          onChange={(e) => setEdit({ ...edit, code: e.target.value })}
-          onBlur={(e) =>
-            setEdit({ ...edit, code: normalizeCode(e.target.value) })
-          }
-        />
-      </td>
-      <td className="px-4 py-2">{j.assignedTeamIds?.length ?? 0}</td>
-      <td className="px-4 py-2">
-        <div className="flex gap-2 whitespace-nowrap">
-          <button
-            className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
-            onClick={() => onReset(edit)}
-          >
-            Reset Assignments
+          />
+        </label>
+      </div>
+      <p className="text-sm text-[var(--ink-3)]">
+        Assigned teams: {j.assignedTeamIds?.length ?? 0}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          className="ux-primary"
+          disabled={!dirty}
+          onClick={() => onSave(edit)}
+        >
+          Save Changes
+        </button>
+        {dirty && (
+          <button className="ux-secondary" onClick={() => setEdit(j)}>
+            Discard
           </button>
-          <button
-            className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
-            disabled={!dirty}
-            onClick={() => onSave(edit)}
-          >
-            Save Changes
-          </button>
-          <CopyButton value={j.code ?? ""} />
-          {dirty && (
-            <button onClick={() => setEdit(j)} className="text-xs underline">
-              Discard
-            </button>
-          )}
-          <button
-            className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
-            onClick={() => onDelete(edit)}
-          >
-            Delete
-          </button>
-        </div>
-      </td>
-    </tr>
+        )}
+        <CopyButton value={j.code ?? ""} label="Copy code" />
+        <button className="ux-secondary" onClick={() => onReset(edit)}>
+          Reset Assignments
+        </button>
+        <button
+          className="ux-secondary !text-rose-600 sm:ml-auto"
+          onClick={() => onDelete(edit)}
+        >
+          Delete judge
+        </button>
+      </div>
+    </article>
   );
 }
 

@@ -25,16 +25,20 @@ export default function Login() {
         setErr(errorMessage(e));
       }
     };
+    // Amplify exchanges the ?code for tokens as soon as the page loads, which can finish before this
+    // effect runs and miss the Hub event. Poll the session as well.
     const stop = Hub.listen("auth", ({ payload }) => {
       if (payload.event === "signInWithRedirect") void finish();
       if (payload.event === "signInWithRedirect_failure") setErr("Google sign-in failed.");
     });
+    const tick = setInterval(() => void finish(), 500);
     void finish();
     const giveUp = setTimeout(() => {
-      if (!done) router.replace("/auth");
-    }, 15000);
+      if (!done) setErr("Still no session after 20 seconds. Try again from the sign-in page.");
+    }, 20000);
     return () => {
       stop();
+      clearInterval(tick);
       clearTimeout(giveUp);
     };
   }, [router]);

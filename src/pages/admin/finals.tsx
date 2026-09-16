@@ -1,4 +1,6 @@
 "use client";
+
+import TableScroll from "@/components/TableScroll";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Layout from "@/components/Layout";
@@ -231,8 +233,8 @@ function Page() {
           Compare review counts before selecting finalists. Teams without
           reviews are not selected automatically.
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+        <TableScroll label="Finalist comparison">
+          <table className="min-w-[32rem] w-full text-left text-sm">
             <thead>
               <tr>
                 <th className="p-2">Finalist</th>
@@ -259,7 +261,7 @@ function Page() {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         {!ranked.length && (
           <Link href="/admin/teams" className="underline">
             Add teams

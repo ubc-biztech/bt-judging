@@ -1,5 +1,7 @@
 "use client";
 
+import TableScroll from "@/components/TableScroll";
+
 import dynamic from "next/dynamic";
 import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
@@ -82,8 +84,11 @@ function Page() {
           )}
         </p>
       )}
-      <div className="mt-6 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-        <table className="min-w-full border-separate border-spacing-0 text-sm">
+      <TableScroll
+        label="Published schedule"
+        className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-2"
+      >
+        <table className="min-w-full [&_th]:min-w-40 border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -137,7 +142,7 @@ function Page() {
               )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     </div>
   );
 }

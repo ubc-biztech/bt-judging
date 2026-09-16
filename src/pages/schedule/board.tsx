@@ -1,6 +1,8 @@
 "use client";
 import EventBrand from "@/components/EventBrand";
 
+import TableScroll from "@/components/TableScroll";
+
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import RoleGate from "@/components/RoleGate";
@@ -76,7 +78,7 @@ function Board() {
         error={error ? errorMessage(error) : ""}
         onRetry={load}
       />
-      <div className="mt-8 overflow-x-auto">
+      <TableScroll label="Live schedule" className="mt-8">
         <table className="min-w-full border-separate border-spacing-0 text-lg">
           <thead>
             <tr>
@@ -151,7 +153,7 @@ function Board() {
               )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
 
       {current && (
         <div className="mt-6 flex items-center gap-2 text-sm text-slate-400">

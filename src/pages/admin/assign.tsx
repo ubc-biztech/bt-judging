@@ -1,5 +1,7 @@
 "use client";
 
+import TableScroll from "@/components/TableScroll";
+
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -195,8 +197,8 @@ function Page() {
                 No judges in this room.
               </p>
             ) : (
-              <div className="mt-3 overflow-x-auto">
-                <table className="min-w-full text-sm">
+              <TableScroll label={`Assignments in ${r.name}`} className="mt-3">
+                <table className="min-w-full text-sm [&_th]:min-w-32">
                   <thead>
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -258,7 +260,7 @@ function Page() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             )}
           </section>
         );
