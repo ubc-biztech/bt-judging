@@ -24,7 +24,14 @@ export default function Home() {
         return;
       }
       if (session.role === "team") {
-        router.replace("/submit");
+        try {
+          const settings = await settingsOrDefaults();
+          router.replace(
+            settings.phase === "closed" ? "/team/feedback" : "/submit",
+          );
+        } catch {
+          router.replace("/submit");
+        }
         return;
       }
       if (session.role === "judge") {

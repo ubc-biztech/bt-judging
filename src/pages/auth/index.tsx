@@ -5,7 +5,11 @@ import { useRouter } from "next/router";
 import { signIn, signInWithRedirect, signOut } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
 import Layout from "@/components/Layout";
-import { DEFAULT_EVENT_NAME } from "@/lib/event";
+import { fallbackEventName } from "@/lib/event";
+import EventBrand from "@/components/EventBrand";
+import { EventPicker, useEvents } from "@/components/EventProvider";
+import { EVENT_ID, eventKey } from "@/lib/event";
+import { UnknownCodeError } from "@ubc-biztech/sdk";
 import { getSession, type Role } from "@/lib/session";
 import {
   cognitoIdToken,
@@ -18,12 +22,17 @@ import { configureAmplify } from "@/lib/amplify";
 const HOME: Record<Role, string> = {
   admin: "/admin",
   judge: "/",
-  team: "/submit",
+  team: "/",
 };
 
 export default function Auth() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>("judge");
+  const { catalog } = useEvents();
+  const selectedEvent = catalog?.events.find(
+    (event) => eventKey(event) === EVENT_ID,
+  );
+  const eventName = selectedEvent?.eventName || fallbackEventName();
+  const [method, setMethod] = useState<"code" | "admin">("code");
   const [code, setCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +57,6 @@ export default function Auth() {
         if (!cancelled) setErr(errorMessage(e));
       }
     };
-    void finish();
     const stop = Hub.listen("auth", ({ payload }) => {
       if (payload.event === "signInWithRedirect") void finish();
       if (payload.event === "signInWithRedirect_failure")
@@ -60,28 +68,33 @@ export default function Auth() {
     };
   }, [router]);
 
-  async function run(work: () => Promise<Role>) {
+  async function run(method: "code" | "admin", work: () => Promise<Role>) {
     if (busy) return;
     setErr("");
+    setMethod(method);
     setBusy(true);
     try {
       router.push(HOME[await work()]);
     } catch (e) {
-      setErr(errorMessage(e) || "Sign-in failed");
+      setErr(
+        e instanceof UnknownCodeError
+          ? `Code not recognized for ${eventName}. Check your code or choose another event.`
+          : errorMessage(e) || "Sign-in failed",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   const codeSignIn = () =>
-    run(async () => {
+    run("code", async () => {
       if (!code.trim()) throw new Error("Enter your code.");
-      // The server resolves the code to a role; the selector is only a hint.
+      // The server resolves the role within the selected event.
       return (await loginWithCode(code)).role;
     });
 
   const adminSignIn = () =>
-    run(async () => {
+    run("admin", async () => {
       if (!email.trim() || !password)
         throw new Error("Enter your BizTech email and password.");
       configureAmplify();
@@ -104,6 +117,7 @@ export default function Auth() {
   const googleSignIn = async () => {
     if (busy) return;
     setBusy(true);
+    setMethod("admin");
     setErr("");
     configureAmplify();
     try {
@@ -114,173 +128,122 @@ export default function Auth() {
     }
   };
 
-  const roleInfo: Record<Role, { title: string; hint: string }> = {
-    admin: { title: "Organizer", hint: "Your BizTech exec account" },
-    judge: { title: "Judge", hint: "The code an organizer gave you" },
-    team: { title: "Team", hint: "Your team's code" },
-  };
-
-  const input =
-    "mt-3 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-4 py-3.5 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500 focus:border-white/20 focus:bg-[#090909]";
-  const label =
-    "text-xs font-semibold uppercase tracking-[0.12em] text-slate-400";
-  const primary =
-    "rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-60";
-  const secondary =
-    "rounded-lg border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-60";
-
   return (
     <Layout>
-      <div className="mx-auto grid max-w-5xl gap-4 py-4 lg:grid-cols-[1.05fr_1fr]">
-        <section className="rounded-xl border border-white/10 bg-[#0c0c0d] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-7">
-          <span className="inline-flex rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300">
-            {DEFAULT_EVENT_NAME}
-          </span>
-          <img src="/hh.svg" alt="HelloHacks" className="mt-6 h-16 w-auto" />
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl">
-            Sign in
-          </h1>
-          <div className="mt-10 grid gap-3 sm:grid-cols-3">
-            {(["admin", "judge", "team"] as const).map((r) => {
-              const selected = role === r;
-              return (
-                <button
-                  key={r}
-                  disabled={busy}
-                  aria-pressed={selected}
-                  onClick={() => {
-                    setRole(r);
-                    setErr("");
-                  }}
-                  className={[
-                    "rounded-lg border px-4 py-4 text-left transition",
-                    selected
-                      ? "border-white/25 bg-[#1a1a1b] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/15 hover:bg-white/[0.05]",
-                  ].join(" ")}
-                >
-                  <p className="text-sm font-semibold">{roleInfo[r].title}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {roleInfo[r].hint}
-                  </p>
-                </button>
-              );
-            })}
+      <section className="mx-auto max-w-4xl rounded-xl border border-white/10 bg-[#0c0c0d] p-6 sm:p-8">
+        <header className="flex flex-wrap items-center justify-between gap-6 border-b border-white/10 pb-6">
+          <div className="flex min-w-0 items-center gap-4">
+            <EventBrand
+              name={eventName}
+              imageUrl={selectedEvent?.imageUrl}
+              className="h-16 w-24"
+            />
+            <div>
+              <p className="text-sm text-slate-400">{eventName}</p>
+              <h1 className="mt-1 text-3xl font-semibold">Sign in</h1>
+            </div>
           </div>
-        </section>
-
-        <section className="rounded-xl border border-white/10 bg-[#111214] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Sign In As {roleInfo[role].title}
-          </p>
-
-          {role === "admin" ? (
-            <form
-              className="mt-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void adminSignIn();
-              }}
-            >
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">
-                BizTech account
-              </h2>
-              <div className="mt-8">
-                <label htmlFor="email" className={label}>
-                  Email
-                </label>
-                <input
-                  id="email"
-                  required
-                  disabled={busy}
-                  className={input}
-                  type="email"
-                  autoComplete="username"
-                  placeholder="you@ubcbiztech.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="mt-5">
-                <label htmlFor="password" className={label}>
-                  Password
-                </label>
-                <input
-                  id="password"
-                  required
-                  disabled={busy}
-                  className={input}
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-              {err && (
-                <p role="alert" className="mt-2 text-sm text-rose-400">
-                  {err}
-                </p>
-              )}
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button type="submit" disabled={busy} className={primary}>
-                  {busy ? "Signing in…" : "Continue"}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={googleSignIn}
-                  className={secondary}
-                >
-                  Sign in with Google
-                </button>
-              </div>
-              <p className="mt-6 text-xs text-slate-500">
-                Only BizTech exec accounts can organize. Judges and teams use a
-                code instead.
+          <div className="w-full sm:w-64">
+            <EventPicker disabled={busy} />
+          </div>
+        </header>
+        <div className="grid md:grid-cols-2">
+          <form
+            aria-label="Judge or team sign in"
+            className="py-6 md:pr-8"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void codeSignIn();
+            }}
+          >
+            <h2 className="text-xl font-semibold">Judges & teams</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Use your code for this event.
+            </p>
+            <label className="ux-label mt-6" htmlFor="code">
+              Access code
+            </label>
+            <input
+              id="code"
+              required
+              disabled={busy}
+              spellCheck={false}
+              className="ux-input"
+              placeholder="Your access code"
+              autoCapitalize="characters"
+              autoComplete="off"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            {err && method === "code" && (
+              <p role="alert" className="mt-3 text-sm text-rose-400">
+                {err}
               </p>
-            </form>
-          ) : (
-            <form
-              className="mt-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void codeSignIn();
-              }}
-            >
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">
-                Code
-              </h2>
-              <div className="mt-10">
-                <label htmlFor="code" className={label}>
-                  {roleInfo[role].title} Code
-                </label>
-                <input
-                  id="code"
-                  required
-                  disabled={busy}
-                  spellCheck={false}
-                  className={input}
-                  placeholder="Your access code"
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-                {err && (
-                  <p role="alert" className="mt-2 text-sm text-rose-400">
-                    {err}
-                  </p>
-                )}
-              </div>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button type="submit" disabled={busy} className={primary}>
-                  {busy ? "Signing in…" : "Continue"}
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
-      </div>
+            )}
+            <button type="submit" disabled={busy} className="ux-primary mt-5">
+              {busy && method === "code" ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+          <form
+            aria-label="Organizer sign in"
+            className="border-t border-white/10 py-6 md:border-l md:border-t-0 md:pl-8"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void adminSignIn();
+            }}
+          >
+            <h2 className="text-xl font-semibold">Organizers</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Sign in with your BizTech account.
+            </p>
+            <label className="ux-label mt-6" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              required
+              disabled={busy}
+              className="ux-input"
+              type="email"
+              autoComplete="username"
+              placeholder="you@ubcbiztech.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <label className="ux-label mt-4" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              required
+              disabled={busy}
+              className="ux-input"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {err && method === "admin" && (
+              <p role="alert" className="mt-3 text-sm text-rose-400">
+                {err}
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button type="submit" disabled={busy} className="ux-primary">
+                {busy && method === "admin" ? "Signing in…" : "Sign in"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={googleSignIn}
+                className="ux-secondary"
+              >
+                Sign in with Google
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
     </Layout>
   );
 }

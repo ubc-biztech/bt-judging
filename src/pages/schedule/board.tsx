@@ -1,4 +1,5 @@
 "use client";
+import EventBrand from "@/components/EventBrand";
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
@@ -53,7 +54,12 @@ function Board() {
     <div className="min-h-dvh bg-[#050505] px-8 py-8 text-slate-100">
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
-          <img src="/hh.svg" alt="HelloHacks" className="h-12 w-auto" />
+          {doc && (
+            <EventBrand
+              name={doc.settings.eventName}
+              imageUrl={doc.settings.imageUrl}
+            />
+          )}
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-50">
             Judging Schedule
           </h1>

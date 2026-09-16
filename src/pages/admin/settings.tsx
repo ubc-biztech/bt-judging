@@ -3,10 +3,17 @@ import { useEffect, useState } from "react";
 import type { JudgingSettings as Settings } from "@ubc-biztech/sdk";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
+import EventBrand from "@/components/EventBrand";
 import { Status } from "@/components/Feedback";
-import { settingsOrDefaults, patchSettings, errorMessage } from "@/lib/bt";
+import {
+  settingsOrDefaults,
+  patchSettings,
+  errorMessage,
+  uploadEventImage,
+} from "@/lib/bt";
 const EDITABLE = [
   "eventName",
+  "imageUrl",
   "perTeamJudges",
   "maxImages",
   "finalsTopN",
@@ -30,6 +37,7 @@ function Page() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const load = async () => {
     try {
       const next = await settingsOrDefaults();
@@ -45,7 +53,7 @@ function Page() {
   }, []);
   const dirty = !!s && !!saved && EDITABLE.some((key) => s[key] !== saved[key]);
   async function save() {
-    if (!s || !saved || busy) return;
+    if (!s || !saved || busy || uploading) return;
     if (!s.eventName.trim()) {
       setError("Enter an event name.");
       return;
@@ -72,7 +80,7 @@ function Page() {
     }
   }
   return (
-    <div className="max-w-3xl" data-unsaved={dirty}>
+    <div className="max-w-3xl" data-unsaved={dirty || uploading}>
       <h1 className="text-3xl font-semibold">Event Settings</h1>
       <Status
         error={error}
@@ -92,7 +100,7 @@ function Page() {
             <div className="mb-5 flex flex-wrap items-center gap-3">
               <button
                 type="submit"
-                disabled={!dirty || busy}
+                disabled={!dirty || busy || uploading}
                 className="ux-primary"
               >
                 {busy ? "Saving…" : "Save settings"}
@@ -104,7 +112,7 @@ function Page() {
                   </span>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || uploading}
                     className="ux-secondary"
                     onClick={() => {
                       setS(saved);
@@ -116,7 +124,7 @@ function Page() {
                 </>
               )}
             </div>
-            <fieldset disabled={busy} className="space-y-6">
+            <fieldset disabled={busy || uploading} className="space-y-6">
               <label className="ux-label">
                 Event name
                 <input
@@ -126,6 +134,61 @@ function Page() {
                   onChange={(e) => setS({ ...s, eventName: e.target.value })}
                 />
               </label>
+              <div className="space-y-3">
+                <p className="ux-label">Event photo or logo</p>
+                <EventBrand
+                  name={s.eventName}
+                  imageUrl={s.imageUrl}
+                  className="h-24 w-48"
+                />
+                <label className="ux-label">
+                  Upload image
+                  <input
+                    className="ux-input"
+                    type="file"
+                    aria-label="Upload image"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={async (e) => {
+                      const file = e.currentTarget.files?.[0];
+                      e.currentTarget.value = "";
+                      if (!file) return;
+                      setUploading(true);
+                      setError("");
+                      setNotice("");
+                      try {
+                        const imageUrl = await uploadEventImage(file);
+                        setS((current) =>
+                          current ? { ...current, imageUrl } : current,
+                        );
+                        setNotice(
+                          "Image uploaded. Save settings to publish it.",
+                        );
+                      } catch (e) {
+                        setError(errorMessage(e));
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                  />
+                  <span className="text-xs font-normal text-slate-400">
+                    PNG, JPG or WebP, up to 5 MB. Save settings to publish.
+                  </span>
+                </label>
+                {uploading && (
+                  <p role="status" className="text-sm">
+                    Uploading image…
+                  </p>
+                )}
+                {s.imageUrl && (
+                  <button
+                    type="button"
+                    className="ux-secondary"
+                    onClick={() => setS({ ...s, imageUrl: "" })}
+                  >
+                    Remove image
+                  </button>
+                )}
+              </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 {(
                   [

@@ -83,3 +83,11 @@ Reviews are separate rows: a judge writes one with `judging().team(id).review(..
 - Review totals are computed by the server from the rubric; the client never computes a score that matters.
 - Codes are validated by the server. The old portal read every code into the browser to compare them.
 - Auto-assign and finals selection run in the browser and are saved with the document.
+
+### Events and branding
+
+Organizers can create events and choose the default under **Events**. Anyone can select an earlier event at sign-in; teams use that event's code to read feedback once organizers release it. Event links include `?event=<slug>-<year>`. Selection is per tab and participant sessions are stored separately per event.
+
+**Event Settings → Upload image** accepts PNG, JPG and WebP files up to 5 MB. Save settings to publish the image. Uploads use the SDK's existing event-image endpoint and the `biztech-event-images` bucket. Its CORS allowlist must include the deployed portal origin for PUT requests; production uses `https://bt-judging.vercel.app`.
+
+This feature requires the backend's `GET /judging`, `POST /judging` and `PUT /judging/default` endpoints. `NEXT_PUBLIC_EVENT_ID` remains a fallback for first setup; changing events no longer requires redeploying.

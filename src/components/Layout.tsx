@@ -29,7 +29,9 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useClientSession, type Session } from "@/lib/session";
-import { DEFAULT_EVENT_NAME } from "@/lib/event";
+import { fallbackEventName } from "@/lib/event";
+import EventBrand from "./EventBrand";
+import { EventPicker } from "./EventProvider";
 import { usePoll } from "@/lib/usePoll";
 import { eventOrEmpty, logout, settingsOrDefaults } from "@/lib/bt";
 
@@ -59,6 +61,13 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
     {
       name: "Event Controls",
       items: [
+        {
+          name: "Events",
+          href: "/admin/events",
+          hint: "Choose or create an event",
+          icon: CalendarDaysIcon,
+          match: /^\/admin\/events$/,
+        },
         {
           name: "Dashboard",
           href: "/admin",
@@ -264,7 +273,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     15000,
   );
   const settings = event?.settings;
-  const eventName = settings?.eventName?.trim() || DEFAULT_EVENT_NAME;
+  const eventName = settings?.eventName?.trim() || fallbackEventName();
   const phase = settings?.phase ?? "";
   const showTeamFeedback = settings?.showTeamFeedback !== false;
 
@@ -371,7 +380,11 @@ export default function Layout({ children }: { children: ReactNode }) {
           className="inline-flex items-center"
         >
           <div>
-            <img src="/hh.svg" alt="HelloHacks" className="mb-2 h-10 w-auto" />
+            <EventBrand
+              name={eventName}
+              imageUrl={settings?.imageUrl}
+              className="mb-2 h-10 w-auto"
+            />
             <p className="text-base font-semibold tracking-tight text-white">
               {eventName}
             </p>
@@ -391,6 +404,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         )}
       </div>
 
+      {role !== "guest" && (
+        <div className="mt-4">
+          <EventPicker />
+        </div>
+      )}
       <div className="mt-6 flex-1 space-y-6 overflow-y-auto">
         {sections.map((section) => (
           <div key={section.name}>
@@ -557,16 +575,19 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <main className="mx-auto max-w-7xl px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8">
-          {role === "admin" && settings && path !== "/admin" && (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
-              <span>
-                Current phase: <strong>{PHASE_LABELS[settings.phase]}</strong>
-              </span>
-              <Link href="/admin#phase" className="font-semibold underline">
-                Manage phase →
-              </Link>
-            </div>
-          )}
+          {role === "admin" &&
+            settings &&
+            path !== "/admin" &&
+            path !== "/admin/events" && (
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
+                <span>
+                  Current phase: <strong>{PHASE_LABELS[settings.phase]}</strong>
+                </span>
+                <Link href="/admin#phase" className="font-semibold underline">
+                  Manage phase →
+                </Link>
+              </div>
+            )}
           {children}
         </main>
       </div>

@@ -27,7 +27,12 @@ import {
 } from "@ubc-biztech/sdk";
 import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import { configureAmplify } from "./amplify";
-import { DEFAULT_EVENT_NAME, EVENT } from "./event";
+import {
+  DEFAULT_EVENT_NAME,
+  EVENT,
+  EVENT_ID,
+  fallbackEventName,
+} from "./event";
 import { clearSession, getSession, setSession, type Session } from "./session";
 
 export const API_URL =
@@ -49,6 +54,11 @@ export async function cognitoIdToken(): Promise<string | null> {
 /** The one client. A judge's or team's code, or an organizer's token, whichever is signed in. */
 export const bt = createClient({
   baseUrl: API_URL,
+  fetch: (input, init) =>
+    fetch(input, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(15000),
+    }),
   getCode: () => {
     const s = getSession();
     return s && s.role !== "admin" ? s.code : null;
@@ -186,6 +196,39 @@ export const EMPTY_EVENT: JudgingEvent = {
   teams: [],
 };
 
+export const defaultSettings = (): JudgingSettings => ({
+  ...DEFAULT_SETTINGS,
+  eventName: fallbackEventName(),
+});
+export const emptyEvent = (): JudgingEvent => ({
+  ...EMPTY_EVENT,
+  settings: defaultSettings(),
+});
+
+export async function uploadEventImage(file: File): Promise<string> {
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+    throw new Error("Choose a PNG, JPG or WebP image.");
+  if (!file.size || file.size > 5 * 1024 * 1024)
+    throw new Error("Choose an image smaller than 5 MB.");
+  const image = await createImageBitmap(file).catch(() => {
+    throw new Error("This file could not be read as an image.");
+  });
+  image.close();
+  const { uploadUrl, publicUrl } = await bt.eventImage.uploadUrl({
+    fileType: file.type,
+    fileName: file.name,
+    prefix: "optimized",
+    eventId: EVENT_ID,
+  });
+  const uploaded = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  if (!uploaded.ok) throw new Error("Image upload failed. Try again.");
+  return publicUrl;
+}
+
 // ─── Reads ───────────────────────────────────────────────────────────
 
 /**
@@ -200,7 +243,7 @@ export async function loadEvent(): Promise<JudgingEvent | null> {
 
 /** `loadEvent()`, or the empty event, so pages always have something to render. */
 export async function eventOrEmpty(): Promise<JudgingEvent> {
-  return (await loadEvent()) ?? EMPTY_EVENT;
+  return (await loadEvent()) ?? emptyEvent();
 }
 
 /**
@@ -210,9 +253,9 @@ export async function eventOrEmpty(): Promise<JudgingEvent> {
 export async function settingsOrDefaults(): Promise<JudgingSettings> {
   if (!getSession()) {
     const info = await orNull(judging().info());
-    return { ...DEFAULT_SETTINGS, ...(info?.settings ?? {}) };
+    return { ...defaultSettings(), ...(info?.settings ?? {}) };
   }
-  return (await loadEvent())?.settings ?? DEFAULT_SETTINGS;
+  return (await loadEvent())?.settings ?? defaultSettings();
 }
 
 /** Reviews, as the signed-in role may see them. Organizers see everything. */
@@ -237,11 +280,12 @@ export type EditableEvent = JudgingAdminSetInput;
 export async function saveEvent(
   patch: (doc: EditableEvent) => EditableEvent,
 ): Promise<JudgingEvent> {
-  const current = (await orNull(judging().admin.get())) ?? EMPTY_EVENT;
+  const scope = judging();
+  const current = (await orNull(scope.admin.get())) ?? emptyEvent();
   const { me: _me, updatedAt: _updatedAt, ...editable } = current;
   void _me;
   void _updatedAt;
-  const saved = await judging().admin.set(patch(editable));
+  const saved = await scope.admin.set(patch(editable));
   if (typeof window !== "undefined")
     window.dispatchEvent(new Event("judging:update"));
   return saved;

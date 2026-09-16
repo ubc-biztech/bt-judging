@@ -131,3 +131,41 @@ const many = presetCodes(
   "first",
 );
 assert.equal(new Set(many.map((j) => j.code)).size, 25);
+
+// Event links parse a complete scope; changing scope must never reuse another event's code.
+import { parseEventKey, initializeEvent } from "../src/lib/event";
+assert.deepEqual(parseEventKey("hello-hacks-2026"), {
+  id: "hello-hacks",
+  year: 2026,
+});
+for (const bad of [
+  "../event-2026",
+  "HELLO-2026",
+  "event",
+  "event-1999",
+  "event-2101",
+  "event--2026",
+])
+  assert.equal(parseEventKey(bad), null);
+const store = new Map<string, string>();
+const storage = {
+  getItem: (key: string) => store.get(key) ?? null,
+  setItem: (key: string, value: string) => store.set(key, value),
+  removeItem: (key: string) => store.delete(key),
+};
+Object.assign(globalThis, {
+  localStorage: storage,
+  window: { dispatchEvent: () => {} },
+  StorageEvent: class {},
+});
+import { getSession, setSession } from "../src/lib/session";
+initializeEvent("hellohacks-2026");
+setSession({ role: "team", id: "current-team", code: "CURRENT" });
+initializeEvent("product-2025");
+assert.equal(getSession(), null);
+setSession({ role: "team", id: "past-team", code: "PAST" });
+initializeEvent("hellohacks-2026");
+assert.equal(getSession()?.id, "current-team");
+initializeEvent("product-2025");
+assert.equal(getSession()?.id, "past-team");
+console.log("Event scope and session checks passed.");

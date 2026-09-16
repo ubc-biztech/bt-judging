@@ -5,10 +5,38 @@ export const DEFAULT_EVENT_NAME = "HelloHacks 2026";
  * The event this deployment judges, as the BizTech API keys it: (slug, year).
  * NEXT_PUBLIC_EVENT_ID is `<slug>-<year>`, e.g. `hellohacks-2026`.
  */
-const raw = (process.env.NEXT_PUBLIC_EVENT_ID?.trim() || DEFAULT_EVENT_ID).toLowerCase();
-const m = /^(.*)-(\d{4})$/.exec(raw);
-export const EVENT_ID = raw;
-export const EVENT = { id: m ? m[1] : raw, year: m ? Number(m[2]) : new Date().getFullYear() } as const;
+export const FALLBACK_EVENT_ID = (
+  process.env.NEXT_PUBLIC_EVENT_ID?.trim() || DEFAULT_EVENT_ID
+).toLowerCase();
+export function parseEventKey(key: string) {
+  const match = /^([a-z0-9]+(?:-[a-z0-9]+)*)-(\d{4})$/.exec(key);
+  if (
+    !match ||
+    match[1].length > 80 ||
+    Number(match[2]) < 2000 ||
+    Number(match[2]) > 2100
+  )
+    return null;
+  return { id: match[1], year: Number(match[2]) };
+}
+export const eventKey = (event: { eventID: string; year: number }) =>
+  `${event.eventID}-${event.year}`;
+
+// Initialized once in the browser before any page mounts. Switching events reloads the page,
+// so in-flight forms and credentials can never move into another event's scope.
+export let EVENT_ID = FALLBACK_EVENT_ID;
+export let EVENT = parseEventKey(EVENT_ID) || parseEventKey(DEFAULT_EVENT_ID)!;
+export function initializeEvent(key: string) {
+  const parsed = parseEventKey(key);
+  if (!parsed) throw new Error("Invalid event ID.");
+  EVENT_ID = key;
+  EVENT = parsed;
+}
+export function fallbackEventName() {
+  return EVENT_ID === DEFAULT_EVENT_ID
+    ? DEFAULT_EVENT_NAME
+    : `${EVENT.id.replace(/-/g, " ")} ${EVENT.year}`;
+}
 
 export function getEventInitials(name: string) {
   const words = name

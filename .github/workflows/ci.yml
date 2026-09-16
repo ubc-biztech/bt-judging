@@ -19,6 +19,7 @@ jobs:
           git config --global --add url."https://x-access-token:${SDK_READ_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
       - run: npm ci
       - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm run check:ux
       - run: npm run lint --if-present
       - run: npm run build
         env: { NEXT_PUBLIC_EVENT_ID: hellohacks-2026 }
