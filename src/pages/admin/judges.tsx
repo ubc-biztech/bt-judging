@@ -6,7 +6,7 @@ import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
 import type { Judge, JudgingTeam } from "@ubc-biztech/sdk";
-import { eventOrEmpty, setJudges, errorMessage } from "@/lib/bt";
+import { eventOrEmpty, saveEvent, setJudges, errorMessage } from "@/lib/bt";
 import { CODE_PRESETS, normalizeCode, presetCodes, type CodePreset } from "@/lib/codes";
 
 function AdminJudgesInner() {
@@ -26,6 +26,8 @@ function Page() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newJ, setNewJ] = useState({ name: "" });
+  const [creating, setCreating] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   // The most recently created judge: its code is shown once, prominently, so it can be handed over.
   const [created, setCreated] = useState<Judge | null>(null);
 
@@ -35,6 +37,7 @@ function Page() {
       const doc = await eventOrEmpty();
       setList(doc.judges);
       setTeams(doc.teams);
+      setCreated((current) => current ? doc.judges.find((j) => j.id === current.id) ?? null : null);
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -49,20 +52,45 @@ function Page() {
     try {
       await fn();
       setError(null);
+      await load();
     } catch (e) {
       setError(errorMessage(e));
     }
-    await load();
   }
 
   async function createJudge() {
-    if (!newJ.name) return alert("Name required");
-    await run(async () => {
-      const before = new Set(list.map((x) => x.id));
-      const saved = await setJudges((js) => [...js, { name: newJ.name, assignedTeamIds: [] }]);
-      setCreated(saved.judges.find((x) => !before.has(x.id)) ?? null);
-      setNewJ({ name: "" });
-    });
+    if (creating) return;
+    const name = newJ.name.trim();
+    if (!name) return setError("Name required");
+    setCreating(true);
+    try {
+      await run(async () => {
+        const before = new Set<string | undefined>();
+        const saved = await saveEvent((doc) => {
+          doc.judges.forEach((j) => before.add(j.id));
+          const taken = [...doc.judges, ...doc.teams].map((x) => x.code ?? "");
+          const additions = presetCodes([{ name, assignedTeamIds: [] }], taken, preset);
+          return { ...doc, judges: [...doc.judges, ...additions] };
+        });
+        setCreated(saved.judges.find((x) => !before.has(x.id)) ?? null);
+        setCopiedCode(null);
+        setNewJ({ name: "" });
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function copyCode() {
+    if (!created?.code) return;
+    try {
+      await navigator.clipboard.writeText(created.code);
+      setCopiedCode(created.code);
+      setError(null);
+    } catch {
+      setCopiedCode(null);
+      setError("Could not copy the code. Select and copy it manually.");
+    }
   }
 
   async function saveJudge(j: Judge) {
@@ -95,24 +123,28 @@ function Page() {
           <div>
             <div className="text-lg font-semibold text-slate-50">Create Judge</div>
             <p className="mt-1 text-sm text-slate-400">
-              Add a judge by name. An access code is generated for them.
+              Add a judge by name. Their access code uses the selected preset.
             </p>
           </div>
         </div>
-        <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center">
+        <form className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center" onSubmit={(e) => { e.preventDefault(); void createJudge(); }}>
           <input
-            className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
+            className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none xl:flex-1"
             placeholder="Name"
+            aria-label="Judge name"
+            required
+            disabled={creating}
             value={newJ.name}
             onChange={(e) => setNewJ({ ...newJ, name: e.target.value })}
           />
           <button
-            onClick={createJudge}
-            className="h-11 shrink-0 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-slate-200"
+            type="submit"
+            disabled={creating || loading}
+            className="h-11 shrink-0 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-50"
           >
-            Create
+            {creating ? "Creating…" : "Create"}
           </button>
-        </div>
+        </form>
         {created && (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
             <span>
@@ -123,9 +155,10 @@ function Page() {
             </code>
             <button
               className="rounded-md border border-emerald-400/30 px-2 py-1 text-xs"
-              onClick={() => navigator.clipboard?.writeText(created.code ?? "")}
+              onClick={copyCode}
+              aria-live="polite"
             >
-              Copy
+              {copiedCode === created.code ? "Copied!" : "Copy"}
             </button>
           </div>
         )}
@@ -140,6 +173,8 @@ function Page() {
         <select
           className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
           value={preset}
+          aria-label="Judge code preset"
+          disabled={creating}
           onChange={(e) => setPreset(e.target.value as CodePreset)}
         >
           {CODE_PRESETS.map((p) => (
@@ -215,7 +250,7 @@ function Row({
     <tr className="border-t border-gray-100 dark:border-white/10">
       <td className="px-4 py-2">
         <input
-          className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
+          className="w-full min-w-40 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
           value={edit.name}
           onChange={(e) => setEdit({ ...edit, name: e.target.value })}
         />
@@ -230,18 +265,18 @@ function Row({
       </td>
       <td className="px-4 py-2">{edit.assignedTeamIds?.length ?? 0}</td>
       <td className="px-4 py-2">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 whitespace-nowrap">
           <button
             className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
             onClick={() => onReset(edit)}
           >
-            Reset
+            Reset Assignments
           </button>
           <button
             className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
             onClick={() => onSave(edit)}
           >
-            Save
+            Save Changes
           </button>
           <button
             className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"

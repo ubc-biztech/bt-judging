@@ -8,7 +8,7 @@ import RoleGate from "@/components/RoleGate";
 import type { Judge, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import { eventOrEmpty, saveEvent, errorMessage } from "@/lib/bt";
 import { getSession } from "@/lib/session";
-import { EMPTY_SCHEDULE, assignmentsFrom, describeChanges, excludeFromBlock, isExcluded, toggleExclusion, withChanges, type Schedule } from "@/lib/schedule";
+import { EMPTY_SCHEDULE, assignmentsFrom, describeChanges, isExcluded, toggleExclusion, withChanges, type Schedule } from "@/lib/schedule";
 
 export default dynamic(() => Promise.resolve(() => (
   <RoleGate allow={["admin"]}>
@@ -19,7 +19,6 @@ export default dynamic(() => Promise.resolve(() => (
 )), { ssr: false });
 
 const card = "rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]";
-const select = "rounded-md border border-white/10 bg-[#0b0b0c] px-2 py-1 text-xs text-slate-100";
 const btn = "rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50";
 
 function Page() {
@@ -113,10 +112,6 @@ function Page() {
                       {r.judgeIds.map((jid) => (
                         <th key={jid} className="px-3 py-2 text-left align-top">
                           <div className="font-semibold text-slate-50">{judgeName(jid)}</div>
-                          <select className={`${select} mt-1`} value="" onChange={(e) => e.target.value && setS(excludeFromBlock(s, jid, e.target.value))} title="Excuse from this block onward">
-                            <option value="">Leaves after…</option>
-                            {s.blocks.map((b, i) => s.blocks[i + 1] && <option key={b.id} value={s.blocks[i + 1]!.id}>{b.label}</option>)}
-                          </select>
                         </th>
                       ))}
                     </tr>
