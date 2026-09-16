@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { Criterion } from "@/lib/types";
 import {
   criterionMax,
@@ -16,6 +16,7 @@ export default function RubricForm({
   defaultFeedback,
   scoreMode,
   readOnly = false,
+  afterSave,
 }: {
   criteria: Criterion[];
   scaleMax: number;
@@ -28,7 +29,9 @@ export default function RubricForm({
   defaultScores?: Record<string, number>;
   defaultFeedback?: string;
   readOnly?: boolean;
+  afterSave?: ReactNode;
 }) {
+  const criterionNodes = useRef<Record<string, HTMLElement | null>>({});
   // The parent mounts one form per team and round, after loading the existing review.
   // Polls never replace a draft. Only a successful write advances the saved baseline.
   const [scores, setScores] = useState<Record<string, number>>(
@@ -67,6 +70,18 @@ export default function RubricForm({
           setError(
             "Choose a score for every criterion. Zero is a valid score.",
           );
+          const missing = criteria.find(
+            (c) =>
+              !Number.isInteger(scores[c.id]) ||
+              scores[c.id] < 0 ||
+              scores[c.id] > criterionMax(c, scaleMax),
+          );
+          if (missing) {
+            criterionNodes.current[missing.id]?.focus({ preventScroll: true });
+            criterionNodes.current[missing.id]?.scrollIntoView({
+              block: "center",
+            });
+          }
           return;
         }
         if (
@@ -101,7 +116,12 @@ export default function RubricForm({
             return (
               <section
                 key={c.id}
-                className="rounded-xl border border-white/10 p-4 space-y-3"
+                ref={(el) => {
+                  criterionNodes.current[c.id] = el;
+                }}
+                tabIndex={-1}
+                aria-label={c.label}
+                className="rounded-xl border border-white/10 p-4 space-y-3 focus-visible:outline-2 focus-visible:outline-[var(--blue)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="font-semibold">{c.label}</h2>
@@ -188,41 +208,44 @@ export default function RubricForm({
             Optional · shared when organizers release feedback
           </span>
           <textarea
-            className="ux-input"
-            rows={4}
+            className="ux-input resize-y"
+            rows={6}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="What worked well? What could improve?"
           />
         </label>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            className="ux-secondary"
-            onClick={() => {
-              if (
-                !confirm(
-                  "Clear the scores and feedback in this draft? Your saved review stays unchanged until you save again.",
+        {!readOnly && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              className="ux-secondary"
+              onClick={() => {
+                if (
+                  !confirm(
+                    "Clear the scores and feedback in this draft? Your saved review stays unchanged until you save again.",
+                  )
                 )
-              )
-                return;
-              setScores({});
-              setFeedback("");
-              setNotice("");
-            }}
-          >
-            Clear draft
-          </button>
-          <button type="submit" className="ux-primary">
-            {submitting
-              ? "Saving…"
-              : hasReview
-                ? "Save review changes"
-                : "Submit review"}
-          </button>
-        </div>
+                  return;
+                setScores({});
+                setFeedback("");
+                setNotice("");
+              }}
+            >
+              Clear draft
+            </button>
+            <button type="submit" className="ux-primary">
+              {submitting
+                ? "Saving…"
+                : hasReview
+                  ? "Save review changes"
+                  : "Submit review"}
+            </button>
+          </div>
+        )}
       </fieldset>
-      <Status error={error} notice={!dirty ? notice : ""} />
+      <Status error={complete ? "" : error} notice={!dirty ? notice : ""} />
+      {!dirty && notice && afterSave}
     </form>
   );
 }

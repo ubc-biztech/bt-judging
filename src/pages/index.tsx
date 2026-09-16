@@ -24,6 +24,15 @@ export default function Home() {
         return;
       }
       if (session.role === "team") {
+        try {
+          const settings = await settingsOrDefaults();
+          if (settings.phase === "closed" && settings.showTeamFeedback) {
+            router.replace("/team/feedback");
+            return;
+          }
+        } catch {
+          // The submission page exposes a retry if the event cannot be loaded.
+        }
         router.replace("/submit");
         return;
       }

@@ -43,6 +43,14 @@ function Page() {
   useEffect(() => {
     void load();
   }, []);
+  const loaded = !!s;
+  useEffect(() => {
+    if (loaded && location.hash === "#feedback-release") {
+      const control = document.getElementById("feedback-release");
+      control?.querySelector("input")?.focus({ preventScroll: true });
+      control?.scrollIntoView({ block: "center" });
+    }
+  }, [loaded]);
   const dirty = !!s && !!saved && EDITABLE.some((key) => s[key] !== saved[key]);
   async function save() {
     if (!s || !saved || busy) return;
@@ -75,8 +83,7 @@ function Page() {
     <div className="max-w-3xl" data-unsaved={dirty}>
       <h1 className="text-3xl font-semibold">Event Settings</h1>
       <Status
-        error={error}
-        notice={dirty ? "" : notice}
+        error={!s ? error : ""}
         loading={!s && !error}
         onRetry={!s ? load : undefined}
       />
@@ -89,33 +96,6 @@ function Page() {
               void save();
             }}
           >
-            <div className="mb-5 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={!dirty || busy}
-                className="ux-primary"
-              >
-                {busy ? "Saving…" : "Save settings"}
-              </button>
-              {dirty && (
-                <>
-                  <span className="text-sm text-amber-300">
-                    Unsaved changes
-                  </span>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="ux-secondary"
-                    onClick={() => {
-                      setS(saved);
-                      setError("");
-                    }}
-                  >
-                    Discard
-                  </button>
-                </>
-              )}
-            </div>
             <fieldset disabled={busy} className="space-y-6">
               <label className="ux-label">
                 Event name
@@ -158,7 +138,11 @@ function Page() {
                       "Lock team submissions",
                       "Overrides the submissions-open phase.",
                     ],
-                    ["showTeamFeedback", "Show teams their feedback", ""],
+                    [
+                      "showTeamFeedback",
+                      "Release team feedback",
+                      "Teams can see their scores and written feedback.",
+                    ],
                     [
                       "allowJudgeSeeOthers",
                       "Show judges other judges’ scores",
@@ -167,7 +151,15 @@ function Page() {
                     ["anonymizeTeams", "Hide team names from judges", ""],
                   ] as const
                 ).map(([key, label, hint]) => (
-                  <label key={key} className="flex items-start gap-3 text-sm">
+                  <label
+                    key={key}
+                    id={
+                      key === "showTeamFeedback"
+                        ? "feedback-release"
+                        : undefined
+                    }
+                    className="flex scroll-mt-24 items-start gap-3 text-sm"
+                  >
                     <input
                       type="checkbox"
                       className="mt-1"
@@ -186,6 +178,34 @@ function Page() {
                 ))}
               </div>
             </fieldset>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={!dirty || busy}
+                className="ux-primary"
+              >
+                {busy ? "Saving…" : "Save settings"}
+              </button>
+              {dirty && (
+                <>
+                  <span className="text-sm text-amber-300">
+                    Unsaved changes
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="ux-secondary"
+                    onClick={() => {
+                      setS(saved);
+                      setError("");
+                    }}
+                  >
+                    Discard
+                  </button>
+                </>
+              )}
+            </div>
+            <Status error={error} notice={dirty ? "" : notice} />
           </form>
         </>
       )}

@@ -47,7 +47,7 @@ function Page() {
                       /{criterion.maxScore}
                     </span>
                   </div>
-                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-400">
                     {criterion.description}
                   </p>
                 </div>

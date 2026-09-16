@@ -87,7 +87,19 @@ export default function PhaseControl({
             {busy ? "Closing…" : "Close judging"}
           </button>
         )}
+        {phase === "closed" && !doc.settings.showTeamFeedback && (
+          <Link className="ux-primary" href="/admin/settings#feedback-release">
+            Release team feedback →
+          </Link>
+        )}
       </div>
+      {phase === "closed" && (
+        <p className="mt-3 text-sm">
+          {doc.settings.showTeamFeedback
+            ? "Teams can view their feedback."
+            : "Team feedback is still hidden."}
+        </p>
+      )}
       <ol
         aria-label="Event phases"
         className="mt-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4"

@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
+import Link from "next/link";
+import ProjectDetails from "@/components/ProjectDetails";
 import { Status } from "@/components/Feedback";
 import SubmissionFields, {
   submissionDraft,
@@ -120,35 +122,51 @@ function Page() {
               needed.{dirty && " Your unsaved draft is preserved."}
             </p>
           )}
-          <form
-            data-unsaved={dirty}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-            className="space-y-4"
-          >
-            <fieldset disabled={busy || closed || !!poll.error}>
-              <SubmissionFields
-                value={draft}
-                onChange={setDraft}
-                maxImages={settings?.maxImages ?? 10}
-              />
-            </fieldset>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="ux-primary"
-                disabled={busy || closed || !!poll.error}
-              >
-                {busy ? "Saving…" : "Save submission"}
-              </button>
-              {dirty && (
-                <span className="text-sm text-amber-300">Unsaved changes</span>
-              )}
-            </div>
-            <Status error={error} notice={!dirty ? notice : ""} />
-          </form>
+          {closed && !dirty ? (
+            <ProjectDetails team={team} />
+          ) : (
+            <form
+              data-unsaved={dirty}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+              }}
+              className="space-y-4"
+            >
+              <fieldset disabled={busy || closed || !!poll.error}>
+                <SubmissionFields
+                  value={draft}
+                  onChange={setDraft}
+                  maxImages={settings?.maxImages ?? 10}
+                />
+              </fieldset>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  className="ux-primary"
+                  disabled={busy || closed || !!poll.error}
+                >
+                  {busy ? "Saving…" : "Save submission"}
+                </button>
+                {dirty && (
+                  <span className="text-sm text-amber-300">
+                    Unsaved changes
+                  </span>
+                )}
+              </div>
+              <Status error={error} notice={!dirty ? notice : ""} />
+            </form>
+          )}
+          <div className="flex flex-wrap gap-3">
+            <Link href="/schedule" className="ux-secondary">
+              View presentation schedule
+            </Link>
+            {settings?.showTeamFeedback && (
+              <Link href="/team/feedback" className="ux-secondary">
+                View my feedback
+              </Link>
+            )}
+          </div>
         </>
       )}
     </div>
