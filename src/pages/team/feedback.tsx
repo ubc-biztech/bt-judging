@@ -6,7 +6,6 @@ import { Status } from "@/components/Feedback";
 import { ForbiddenError } from "@ubc-biztech/sdk";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
@@ -81,69 +80,6 @@ function Page() {
     [current],
   );
 
-  function csvCell(v: unknown) {
-    const s = v == null ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }
-
-  function dateSlug() {
-    return new Date().toISOString().replace(/[:.]/g, "-");
-  }
-
-  function downloadBlob(
-    parts: (string | Blob)[],
-    filename: string,
-    type: string,
-  ) {
-    const blob = new Blob(parts, { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportCsv() {
-    if (!teamId) return;
-
-    const cols = [
-      "Round",
-      "JudgeId",
-      "JudgeName",
-      ...crits.map((c) => `score_${c.id}`),
-      "TotalRaw",
-      "TotalWeighted",
-      "Feedback",
-      "SubmittedAt",
-    ];
-    const lines: string[] = [];
-    lines.push(cols.map(csvCell).join(","));
-
-    current.forEach((r) => {
-      const perCrit = crits.map((c) =>
-        typeof r.scores?.[c.id] === "number" ? r.scores![c.id] : "",
-      );
-      lines.push(
-        [
-          csvCell(r.round || "prelim"),
-          csvCell(r.judgeId),
-          csvCell(r.judgeName || ""),
-          ...perCrit.map(csvCell),
-          csvCell(Number(r.total || 0).toFixed(2)),
-          csvCell(Number(r.weightedTotal || 0).toFixed(2)),
-          csvCell(r.feedback || ""),
-          csvCell(r.completedAt || ""),
-        ].join(","),
-      );
-    });
-
-    const filename = `${EVENT_ID}-${
-      team?.name || teamId
-    }-feedback-${tab}-${dateSlug()}.csv`;
-    downloadBlob([lines.join("\n")], filename, "text/csv;charset=utf-8");
-  }
-
   if (failure)
     return (
       <Status
@@ -166,24 +102,9 @@ function Page() {
 
   return (
     <div className="max-w-5xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-            My Feedback
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {sorted.length > 0 && (
-            <button
-              onClick={exportCsv}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-            >
-              Export CSV
-            </button>
-          )}
-        </div>
-      </div>
+      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
+        My Feedback
+      </h1>
 
       <div className="mt-4 rounded-2xl border border-gray-200 p-4 dark:border-white/10">
         {team ? (
