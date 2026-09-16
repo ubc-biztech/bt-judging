@@ -8,6 +8,7 @@ import RoleGate from "@/components/RoleGate";
 import { CopyButton, Status } from "@/components/Feedback";
 import SubmissionFields, {
   submissionDraft,
+  submissionKey,
   imageLinks,
   type SubmissionDraft,
 } from "@/components/SubmissionFields";
@@ -43,7 +44,7 @@ function Page({ teamId }: { teamId: string }) {
     setName(t.name);
     setMembers(t.members.join(", "));
     setDraft(d);
-    setSaved(JSON.stringify([t.name, t.members.join(", "), d]));
+    setSaved(JSON.stringify([t.name, t.members.join(", "), submissionKey(d)]));
   }
   async function load() {
     if (!teamId) return;
@@ -65,7 +66,8 @@ function Page({ teamId }: { teamId: string }) {
   useEffect(() => {
     void load();
   }, [teamId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dirty = !!team && JSON.stringify([name, members, draft]) !== saved;
+  const dirty =
+    !!team && JSON.stringify([name, members, submissionKey(draft)]) !== saved;
   async function save() {
     if (!team || busy || !doc) return;
     setError("");

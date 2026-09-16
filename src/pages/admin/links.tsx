@@ -116,10 +116,7 @@ function Page() {
           className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
           placeholder="https://…"
         />
-        <button
-          type="submit"
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-        >
+        <button type="submit" className="ux-primary">
           {busy ? "Saving…" : "Add link"}
         </button>
       </form>

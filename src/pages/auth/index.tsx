@@ -124,10 +124,8 @@ export default function Auth() {
     "mt-3 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-4 py-3.5 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500 focus:border-white/20 focus:bg-[#090909]";
   const label =
     "text-xs font-semibold uppercase tracking-[0.12em] text-slate-400";
-  const primary =
-    "rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-60";
-  const secondary =
-    "rounded-lg border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-60";
+  const primary = "ux-primary";
+  const secondary = "ux-secondary";
 
   return (
     <Layout>

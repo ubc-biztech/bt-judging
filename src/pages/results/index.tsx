@@ -280,7 +280,7 @@ export default function Results() {
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Tabs */}
-            <div className="mr-2 inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
+            <div className="mr-2 inline-flex max-w-full flex-wrap rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
               {(["prelim", "finals"] as const).map((t) => (
                 <button
                   key={t}
@@ -289,12 +289,7 @@ export default function Results() {
                     setExpanded(null);
                     setTab(t);
                   }}
-                  className={[
-                    "rounded-md px-3 py-1.5 text-xs",
-                    tab === t
-                      ? "bg-indigo-600 text-white"
-                      : "text-gray-700 dark:text-gray-300",
-                  ].join(" ")}
+                  className="ux-tab"
                 >
                   {t === "prelim" ? "Prelim" : "Finals"}
                 </button>

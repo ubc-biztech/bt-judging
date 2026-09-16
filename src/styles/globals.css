@@ -27,7 +27,8 @@ body {
 
 /* Shared controls keep keyboard focus and small-screen forms consistent. */
 .ux-primary,
-.ux-secondary {
+.ux-secondary,
+.ux-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -40,12 +41,18 @@ body {
   text-align: center;
   overflow-wrap: anywhere;
 }
-.ux-primary {
+.ux-primary,
+.ux-tab[aria-pressed="true"] {
   background: var(--blue);
-  color: white;
+  color: #fff;
 }
-.ux-primary:hover {
+.ux-primary:hover,
+.ux-tab[aria-pressed="true"]:hover {
   background: var(--blue-2);
+}
+.ux-tab:not([aria-pressed="true"]) {
+  color: var(--ink-2);
+  background: transparent;
 }
 .ux-secondary {
   background: var(--surface);
