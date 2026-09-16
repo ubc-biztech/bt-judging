@@ -3,7 +3,7 @@
  *
  * Same user pool as the main BizTech app, so any exec account works here. Google sign-in
  * additionally needs this site's origin in the pool's app-client callback URLs
- * (`<origin>/auth`); until then use email + password.
+ * (`<origin>/login`); until then use email + password.
  */
 import { Amplify } from "aws-amplify";
 
@@ -21,7 +21,9 @@ let configured = false;
 export function configureAmplify() {
   if (configured || typeof window === "undefined") return;
   configured = true;
-  const here = `${window.location.origin}/auth`;
+  // /login is what the pool's app client already allows for localhost:3000; deployed origins must be
+  // added to the client's callback and sign-out URLs as <origin>/login.
+  const here = `${window.location.origin}/login`;
   Amplify.configure({
     Auth: {
       Cognito: {

@@ -34,8 +34,10 @@ npm run dev
 Two kinds of sign-in, and the API keeps them apart:
 
 - **Organizers** sign in with their BizTech exec account (Cognito, the same pool as the main app).
-  Email + password works anywhere; **Sign in with Google** additionally needs this site's origin
-  registered as `<origin>/auth` in the pool's app-client callback and sign-out URLs. The API only
+  Email + password works anywhere; **Sign in with Google** returns to `<origin>/login`, which the
+  pool's app client already allows for `http://localhost:3000`. A deployed origin must be added to the
+  client's callback and sign-out URLs as `https://<domain>/login` (Cognito console → user pool
+  `us-west-2_w0R176hhp` → App clients → the main app client → Hosted UI). The API only
   accepts admins (today: a verified `@ubcbiztech.com` email). Their calls carry the ID token.
 - **Judges and teams** have no account. An organizer creates them under **Admin → Judges** and
   **Admin → Teams** (or the CSV seeder); the backend mints each a **code**, shown only to organizers.
