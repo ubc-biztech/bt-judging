@@ -25,7 +25,7 @@ export default function LinksPage() {
 
 function Page() {
   const [links, setLinks] = useState<Link[]>([]);
-  const [form, setForm] = useState({ label: "Schedule", url: "" });
+  const [form, setForm] = useState({ label: "", url: "" });
   const [error, setError] = useState<string | null>(null);
 
   const [loaded, setLoaded] = useState(false);
@@ -52,6 +52,8 @@ function Page() {
     if (!form.label.trim() || !validUrl(form.url))
       return setError("Enter a label and a full URL starting with https://.");
     setBusy(true);
+    setError(null);
+    setNotice("");
     try {
       const saved = await saveLinks((ls) => [
         ...ls,
@@ -69,11 +71,20 @@ function Page() {
   }
 
   async function removeLink(id: string) {
-    if (busy || !confirm("Delete this event link?")) return;
+    if (
+      busy ||
+      !confirm(
+        `Delete “${links.find((link) => link.id === id)?.label || "this event link"}”?`,
+      )
+    )
+      return;
     setBusy(true);
+    setError(null);
+    setNotice("");
     try {
       const saved = await saveLinks((ls) => ls.filter((x) => x.id !== id));
       setLinks(saved.links);
+      setNotice("Link deleted.");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -92,7 +103,7 @@ function Page() {
       </p>
 
       <form
-        data-unsaved={!!form.url}
+        data-unsaved={!!form.url || !!form.label}
         onSubmit={(e) => {
           e.preventDefault();
           void addLink();

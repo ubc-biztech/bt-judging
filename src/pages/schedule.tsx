@@ -3,6 +3,7 @@
 import TableScroll from "@/components/TableScroll";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
@@ -43,6 +44,13 @@ function Page() {
       s.rooms.find((r) => r.id === roomId)?.judgeIds.includes(session.id)) ||
     (session?.role === "team" && teamId === session.id);
   const mySlot = session?.role === "team" ? slotOf(s, session.id) : undefined;
+  const myRooms =
+    session?.role === "judge"
+      ? s.rooms.filter((room) => room.judgeIds.includes(session.id))
+      : [];
+  const assigned =
+    doc?.judges.find((judge) => judge.id === session?.id)?.assignedTeamIds ??
+    [];
 
   return (
     <div className="max-w-7xl">
@@ -51,9 +59,11 @@ function Page() {
       </h1>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-400">
-          {session?.role === "admin"
-            ? "Published schedule"
-            : "Live schedule · Your slots are highlighted."}
+          {doc?.settings.phase === "finals"
+            ? "Preliminary presentation schedule. Finals assignments are in the finals queue."
+            : session?.role === "admin"
+              ? "Published schedule"
+              : "Live schedule · Your slots are highlighted."}
         </p>
         <a
           href="/schedule/board"
@@ -69,6 +79,18 @@ function Page() {
         error={error ? errorMessage(error) : ""}
         onRetry={refresh}
       />
+      {doc && !error && session?.role === "judge" && (
+        <p className="mt-5 rounded-lg border border-[var(--line)] p-4 text-sm">
+          {myRooms.length ? (
+            <>
+              Your {myRooms.length === 1 ? "room" : "rooms"}:{" "}
+              <strong>{myRooms.map((room) => room.name).join(", ")}</strong>
+            </>
+          ) : (
+            "No room assigned yet. Check with an organizer."
+          )}
+        </p>
+      )}
       {doc && !error && session?.role === "team" && (
         <p className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm">
           {mySlot ? (
@@ -121,7 +143,19 @@ function Page() {
                         key={x.teamId}
                         className={`rounded-lg px-2.5 py-1.5 text-sm ${mine(r.id, x.teamId) ? "border border-cyan-300/30 bg-cyan-300/10 text-slate-50" : "text-slate-200"}`}
                       >
-                        {teamName(x.teamId)}
+                        {session?.role === "judge" &&
+                        doc?.settings.phase === "prelim" &&
+                        assigned.includes(x.teamId) &&
+                        mine(r.id, x.teamId) ? (
+                          <Link
+                            className="underline underline-offset-4"
+                            href={`/judge/${x.teamId}`}
+                          >
+                            {teamName(x.teamId)} · Score →
+                          </Link>
+                        ) : (
+                          teamName(x.teamId)
+                        )}
                       </div>
                     ))}
                   </td>

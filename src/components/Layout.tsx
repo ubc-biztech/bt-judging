@@ -10,7 +10,12 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+} from "@headlessui/react";
 import {
   ArrowRightOnRectangleIcon,
   AdjustmentsHorizontalIcon,
@@ -78,7 +83,7 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Event Settings",
           href: "/admin/settings",
-          hint: "Phase, locks, and visibility",
+          hint: "Submission limits and feedback visibility",
           icon: Cog6ToothIcon,
           match: /^\/admin\/settings$/,
         },
@@ -275,7 +280,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const settings = event?.settings;
   const eventName = settings?.eventName?.trim() || fallbackEventName();
   const phase = settings?.phase ?? "";
-  const showTeamFeedback = settings?.showTeamFeedback !== false;
+  const showTeamFeedback = !!settings?.showTeamFeedback;
+  const showJudgeResults = !!settings?.allowJudgeSeeOthers;
 
   const rawPath = router.asPath.split("?")[0];
   const path =
@@ -284,7 +290,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       : rawPath;
   const role = roleFromSession(session);
   const showJudgeFinals =
-    phase === "finals" &&
+    (phase === "finals" || phase === "closed") &&
     !!session &&
     !!settings?.finalsJudgeIds.includes(session.id);
   const sections = useMemo(() => {
@@ -292,6 +298,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     return base.map((section) => ({
       ...section,
       items: section.items.filter((item) => {
+        if (role === "judge" && item.href === "/results" && !showJudgeResults)
+          return false;
         if (
           role === "judge" &&
           !showJudgeFinals &&
@@ -309,7 +317,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         return true;
       }),
     }));
-  }, [role, showJudgeFinals, showTeamFeedback]);
+  }, [role, showJudgeFinals, showTeamFeedback, showJudgeResults]);
   const flatItems = sections.flatMap((section) => section.items);
   const activeItem = flatItems.find((item) => item.match.test(path)) || null;
   const pageTitle = activeItem?.name || eventName;
@@ -427,6 +435,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <li key={item.href} className={mobile ? "w-full" : undefined}>
                     <Link
                       href={item.href}
+                      aria-current={active ? "page" : undefined}
                       onClick={() => mobile && setSidebarOpen(false)}
                       className={[
                         "group flex items-center gap-3 rounded-md px-3 py-2.5 transition",
@@ -485,7 +494,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
-            Signed In
+            {session ? "Signed in" : "Guest"}
           </p>
           <p className="mt-0.5 truncate text-sm font-medium text-slate-100">
             {accountLabel}
@@ -507,6 +516,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative min-h-dvh bg-[#050505] text-slate-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-lg focus:bg-white focus:p-3 focus:text-black"
+      >
+        Skip to content
+      </a>
       <div className="pointer-events-none absolute inset-0"></div>
 
       <Dialog
@@ -523,6 +538,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             transition
             className="relative flex h-full w-full transform transition duration-200 data-[closed]:-translate-x-full"
           >
+            <DialogTitle className="sr-only">Navigation</DialogTitle>
             <div className="m-0 flex h-full w-[15.25rem] max-w-[calc(100vw-1rem)] shrink-0 border-r border-white/10 bg-[#0b0b0c]/96 py-5 pl-3 pr-0 shadow-[24px_0_60px_rgba(0,0,0,0.34)]">
               <SidebarItems mobile />
             </div>
@@ -566,7 +582,11 @@ export default function Layout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
-        <main className="mx-auto min-w-0 max-w-7xl [overflow-wrap:anywhere] px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto min-w-0 max-w-7xl [overflow-wrap:anywhere] px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8"
+        >
           {role === "admin" &&
             settings &&
             path !== "/admin" &&

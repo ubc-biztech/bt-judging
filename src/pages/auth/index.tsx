@@ -54,13 +54,18 @@ export default function Auth() {
         await loginAsAdmin();
         if (!cancelled) router.replace("/admin");
       } catch (e) {
-        if (!cancelled) setErr(errorMessage(e));
+        if (!cancelled) {
+          setMethod("admin");
+          setErr(errorMessage(e));
+        }
       }
     };
     const stop = Hub.listen("auth", ({ payload }) => {
       if (payload.event === "signInWithRedirect") void finish();
-      if (payload.event === "signInWithRedirect_failure")
+      if (payload.event === "signInWithRedirect_failure") {
+        setMethod("admin");
         setErr("Google sign-in failed. Try email and password.");
+      }
     });
     return () => {
       cancelled = true;
@@ -116,6 +121,7 @@ export default function Auth() {
 
   const googleSignIn = async () => {
     if (busy) return;
+    setMethod("admin");
     setBusy(true);
     setMethod("admin");
     setErr("");

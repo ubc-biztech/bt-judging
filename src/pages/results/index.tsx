@@ -4,6 +4,7 @@ import TableScroll from "@/components/TableScroll";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { Status } from "@/components/Feedback";
 import { PHASE_LABELS } from "@/lib/ux";
 import Layout from "@/components/Layout";
@@ -60,7 +61,12 @@ export default function Results() {
     data: reviewList,
     error: reviewError,
     refresh: refreshReviews,
-  } = usePoll(active ? () => listReviews() : null, [active, session?.role]);
+  } = usePoll(
+    active && (isAdmin || settings?.allowJudgeSeeOthers)
+      ? () => listReviews()
+      : null,
+    [active, session?.role, settings?.allowJudgeSeeOthers],
+  );
 
   const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
   const rubric: Rubric | null = useMemo(
@@ -259,6 +265,19 @@ export default function Results() {
   if (!ready || !canViewFullResults) {
     return null;
   }
+  if (isJudge && settings?.allowJudgeSeeOthers === false) {
+    return (
+      <Layout>
+        <h1 className="text-3xl font-semibold">Results</h1>
+        <p className="my-4">
+          The organizers have not shared results with judges yet.
+        </p>
+        <Link href="/judge" className="ux-secondary">
+          View your assigned teams
+        </Link>
+      </Layout>
+    );
+  }
 
   /* ----------------- UI ----------------- */
 
@@ -337,12 +356,6 @@ export default function Results() {
             void refreshReviews();
           }}
         />
-        {isJudge && !allowJudgeSeeOthers && (
-          <p className="mt-3 text-sm text-slate-400">
-            Only your reviews are included. Organizers have not shared other
-            judges’ scores.
-          </p>
-        )}
         {/* Leaderboard */}
         <TableScroll
           label="Team results"

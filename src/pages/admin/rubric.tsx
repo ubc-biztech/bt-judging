@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { Status } from "@/components/Feedback";
-import { normalizeRubric } from "@/lib/judging";
+import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
 import type { Rubric } from "@ubc-biztech/sdk";
 import { loadEvent, setRubric as saveRubric, errorMessage } from "@/lib/bt";
 export default function RubricPage() {
@@ -21,6 +21,14 @@ function Page() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const focusNew = useRef(false);
+  useEffect(() => {
+    if (focusNew.current) {
+      inputs.current[(rubric?.criteria.length ?? 1) - 1]?.focus();
+      focusNew.current = false;
+    }
+  }, [rubric?.criteria.length]);
   async function load() {
     setError("");
     try {
@@ -79,27 +87,11 @@ function Page() {
       className="max-w-4xl space-y-5"
     >
       <h1 className="text-3xl font-semibold">Rubric</h1>
-      <Status error={error} notice={!dirty ? notice : ""} />
+      <p className="text-sm text-[var(--ink-3)]">
+        {rubric.criteria.length} criteria · {rubricTotalMax(rubric)} points
+        total
+      </p>
       <fieldset disabled={busy} className="space-y-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className="ux-primary" disabled={!dirty}>
-            {busy ? "Saving…" : "Save rubric"}
-          </button>
-          {dirty && (
-            <>
-              <span className="text-sm text-amber-300">Unsaved changes</span>
-              <button
-                type="button"
-                className="ux-secondary"
-                onClick={() => {
-                  if (confirm("Discard changes and reload?")) void load();
-                }}
-              >
-                Discard
-              </button>
-            </>
-          )}
-        </div>
         <label className="ux-label">
           Rubric name
           <input
@@ -120,6 +112,9 @@ function Page() {
                 <input
                   className="ux-input"
                   required
+                  ref={(el) => {
+                    inputs.current[i] = el;
+                  }}
                   value={c.label}
                   onChange={(e) => update(i, { label: e.target.value })}
                 />
@@ -182,7 +177,8 @@ function Page() {
         <button
           type="button"
           className="ux-secondary"
-          onClick={() =>
+          onClick={() => {
+            focusNew.current = true;
             setRubric({
               ...rubric,
               criteria: [
@@ -195,12 +191,32 @@ function Page() {
                   maxScore: rubric.scaleMax,
                 },
               ],
-            })
-          }
+            });
+          }}
         >
           Add criterion
         </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className="ux-primary" disabled={!dirty}>
+            {busy ? "Saving…" : "Save rubric"}
+          </button>
+          {dirty && (
+            <>
+              <span className="text-sm text-amber-300">Unsaved changes</span>
+              <button
+                type="button"
+                className="ux-secondary"
+                onClick={() => {
+                  if (confirm("Discard changes and reload?")) void load();
+                }}
+              >
+                Discard
+              </button>
+            </>
+          )}
+        </div>
       </fieldset>
+      <Status error={error} notice={!dirty ? notice : ""} />
     </form>
   );
 }

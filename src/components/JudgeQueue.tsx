@@ -44,6 +44,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
     .filter((t) => !!t);
   const reviewed = new Set(poll.data?.reviews.map((r) => r.teamId));
   const done = teams.filter((t) => reviewed.has(t.id)).length;
+  const next = teams.find((t) => !reviewed.has(t.id));
   const queue = round === "finals" ? "/judge/finals" : "/judge";
   return (
     <div className="max-w-4xl space-y-5">
@@ -81,10 +82,15 @@ function Page({ round }: { round: "prelim" | "finals" }) {
           {!!teams.length && (
             <p role="status" className="text-sm">
               {done} / {teams.length} reviews saved
-              {done === teams.length
+              {done === teams.length && settings.phase === round
                 ? " · All done. You can still edit while this round is open."
                 : ""}
             </p>
+          )}
+          {settings.phase === round && next && (
+            <Link href={`${queue}/${next.id}`} className="ux-primary">
+              {done ? "Continue judging" : "Start judging"} →
+            </Link>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
             {teams.map((t) => (

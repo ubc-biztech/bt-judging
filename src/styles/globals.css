@@ -60,8 +60,7 @@ body {
   border: 1px solid var(--line);
 }
 .ux-primary:disabled,
-.ux-secondary:disabled,
-fieldset:disabled {
+.ux-secondary:disabled {
   opacity: 0.6;
 }
 .ux-input {
@@ -97,6 +96,15 @@ summary:focus-visible {
 }
 fieldset {
   min-width: 0;
+}
+
+/* Keep mobile Safari from zooming the page when a field receives focus. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Native controls must shrink with their grid column at narrow widths and zoom. */

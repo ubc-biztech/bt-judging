@@ -4,6 +4,7 @@ import Link from "next/link";
 import Layout from "./Layout";
 import RoleGate from "./RoleGate";
 import RubricForm from "./RubricForm";
+import ProjectDetails from "./ProjectDetails";
 import { Status } from "./Feedback";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
@@ -36,9 +37,13 @@ function Page({ round }: { round: "prelim" | "finals" }) {
       ? async () => {
           const [doc, reviews] = await Promise.all([
             eventOrEmpty(),
-            listReviews({ teamId, judgeId, round }),
+            listReviews({ judgeId, round }),
           ]);
-          return { doc, existing: reviews[0] };
+          return {
+            doc,
+            reviews,
+            existing: reviews.find((r) => r.teamId === teamId),
+          };
         }
       : null,
     [teamId, judgeId, round],
@@ -55,6 +60,18 @@ function Page({ round }: { round: "prelim" | "finals" }) {
   const readOnly =
     !doc || doc.settings.phase !== round || !eligible(doc) || !!poll.error;
   const queue = round === "finals" ? "/judge/finals" : "/judge";
+  const assigned =
+    round === "finals"
+      ? doc?.settings.finalsJudgeIds.includes(judgeId)
+        ? doc.settings.finalsTeamIds
+        : []
+      : (doc?.judges.find((j) => j.id === judgeId)?.assignedTeamIds ?? []);
+  const nextTeam = doc?.teams.find(
+    (t) =>
+      assigned.includes(t.id) &&
+      t.id !== teamId &&
+      !poll.data?.reviews.some((r) => r.teamId === t.id),
+  );
   async function submit(scores: Record<string, number>, feedback: string) {
     if (submitting || readOnly || !doc) return false;
     setSubmitting(true);
@@ -116,56 +133,10 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               Your draft is preserved.
             </p>
           )}
-          <section className="space-y-3 rounded-xl border border-white/10 p-4">
-            {!doc.settings.anonymizeTeams && !!team.members.length && (
-              <p className="text-sm text-slate-400">
-                {team.members.join(", ")}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-4">
-              {team.github && (
-                <a
-                  className="underline"
-                  href={team.github}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  GitHub ↗
-                </a>
-              )}
-              {team.devpost && (
-                <a
-                  className="underline"
-                  href={team.devpost}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Devpost ↗
-                </a>
-              )}
-            </div>
-            {team.description && (
-              <p className="whitespace-pre-line text-sm">{team.description}</p>
-            )}
-            {!!team.imageUrls?.length && (
-              <details>
-                <summary className="text-sm">
-                  Project images ({team.imageUrls.length})
-                </summary>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {team.imageUrls.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noreferrer">
-                      <img
-                        src={url}
-                        alt={`Project image ${i + 1}`}
-                        className="aspect-video w-full rounded-lg object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </details>
-            )}
-          </section>
+          <ProjectDetails
+            team={team}
+            showMembers={!doc.settings.anonymizeTeams}
+          />
           <Status error={error} />
           {doc.rubric?.criteria.length ? (
             <RubricForm
@@ -178,6 +149,22 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               submitting={submitting}
               readOnly={readOnly}
               onSubmit={submit}
+              afterSave={
+                <div className="flex flex-wrap gap-3">
+                  {nextTeam && !readOnly && (
+                    <Link
+                      href={`${queue}/${nextTeam.id}`}
+                      className="ux-primary"
+                    >
+                      Next unreviewed team →
+                    </Link>
+                  )}
+                  <Link href={queue} className="ux-secondary">
+                    Back to{" "}
+                    {round === "finals" ? "finals queue" : "assigned teams"}
+                  </Link>
+                </div>
+              }
             />
           ) : (
             <p>The organizers have not saved a rubric yet.</p>
