@@ -7,10 +7,19 @@ import { Hub } from "aws-amplify/utils";
 import Layout from "@/components/Layout";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
 import { getSession, type Role } from "@/lib/session";
-import { cognitoIdToken, loginAsAdmin, loginWithCode, errorMessage } from "@/lib/bt";
+import {
+  cognitoIdToken,
+  loginAsAdmin,
+  loginWithCode,
+  errorMessage,
+} from "@/lib/bt";
 import { configureAmplify } from "@/lib/amplify";
 
-const HOME: Record<Role, string> = { admin: "/admin", judge: "/judge", team: "/submit" };
+const HOME: Record<Role, string> = {
+  admin: "/admin",
+  judge: "/",
+  team: "/submit",
+};
 
 export default function Auth() {
   const router = useRouter();
@@ -42,7 +51,8 @@ export default function Auth() {
     void finish();
     const stop = Hub.listen("auth", ({ payload }) => {
       if (payload.event === "signInWithRedirect") void finish();
-      if (payload.event === "signInWithRedirect_failure") setErr("Google sign-in failed. Try email and password.");
+      if (payload.event === "signInWithRedirect_failure")
+        setErr("Google sign-in failed. Try email and password.");
     });
     return () => {
       cancelled = true;
@@ -51,6 +61,7 @@ export default function Auth() {
   }, [router]);
 
   async function run(work: () => Promise<Role>) {
+    if (busy) return;
     setErr("");
     setBusy(true);
     try {
@@ -71,39 +82,52 @@ export default function Auth() {
 
   const adminSignIn = () =>
     run(async () => {
-      if (!email.trim() || !password) throw new Error("Enter your BizTech email and password.");
+      if (!email.trim() || !password)
+        throw new Error("Enter your BizTech email and password.");
       configureAmplify();
       const attempt = () => signIn({ username: email.trim(), password });
-      const { isSignedIn, nextStep } = await attempt().catch(async (e) => {
-        if ((e as { name?: string }).name !== "UserAlreadyAuthenticatedException") throw e;
+      const { isSignedIn } = await attempt().catch(async (e) => {
+        if (
+          (e as { name?: string }).name !== "UserAlreadyAuthenticatedException"
+        )
+          throw e;
         await signOut();
         return attempt();
       });
-      if (!isSignedIn) throw new Error(`Finish setting up your account in the BizTech app first (${nextStep.signInStep}).`);
+      if (!isSignedIn)
+        throw new Error(
+          "Finish signing in to your account in the BizTech app, then try again here.",
+        );
       return (await loginAsAdmin()).role;
     });
 
   const googleSignIn = async () => {
+    if (busy) return;
+    setBusy(true);
     setErr("");
     configureAmplify();
     try {
       await signInWithRedirect({ provider: "Google" });
     } catch (e) {
       setErr(errorMessage(e));
+      setBusy(false);
     }
   };
 
   const roleInfo: Record<Role, { title: string; hint: string }> = {
     admin: { title: "Organizer", hint: "Your BizTech exec account" },
     judge: { title: "Judge", hint: "The code an organizer gave you" },
-    team: { title: "Team", hint: "Your team's code" }
+    team: { title: "Team", hint: "Your team's code" },
   };
 
   const input =
     "mt-3 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-4 py-3.5 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500 focus:border-white/20 focus:bg-[#090909]";
-  const label = "text-xs font-semibold uppercase tracking-[0.12em] text-slate-400";
-  const primary = "rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-60";
-  const secondary = "rounded-lg border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-60";
+  const label =
+    "text-xs font-semibold uppercase tracking-[0.12em] text-slate-400";
+  const primary =
+    "rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-60";
+  const secondary =
+    "rounded-lg border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-60";
 
   return (
     <Layout>
@@ -113,13 +137,17 @@ export default function Auth() {
             {DEFAULT_EVENT_NAME}
           </span>
           <img src="/hh.svg" alt="HelloHacks" className="mt-6 h-16 w-auto" />
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl">Sign in</h1>
+          <h1 className="mt-6 text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl">
+            Sign in
+          </h1>
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             {(["admin", "judge", "team"] as const).map((r) => {
               const selected = role === r;
               return (
                 <button
                   key={r}
+                  disabled={busy}
+                  aria-pressed={selected}
                   onClick={() => {
                     setRole(r);
                     setErr("");
@@ -128,11 +156,13 @@ export default function Auth() {
                     "rounded-lg border px-4 py-4 text-left transition",
                     selected
                       ? "border-white/25 bg-[#1a1a1b] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/15 hover:bg-white/[0.05]"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/15 hover:bg-white/[0.05]",
                   ].join(" ")}
                 >
                   <p className="text-sm font-semibold">{roleInfo[r].title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{roleInfo[r].hint}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {roleInfo[r].hint}
+                  </p>
                 </button>
               );
             })}
@@ -140,7 +170,9 @@ export default function Auth() {
         </section>
 
         <section className="rounded-xl border border-white/10 bg-[#111214] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sign In As {roleInfo[role].title}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Sign In As {roleInfo[role].title}
+          </p>
 
           {role === "admin" ? (
             <form
@@ -150,25 +182,62 @@ export default function Auth() {
                 void adminSignIn();
               }}
             >
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">BizTech account</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">
+                BizTech account
+              </h2>
               <div className="mt-8">
-                <label className={label}>Email</label>
-                <input className={input} type="email" autoComplete="username" placeholder="you@ubcbiztech.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <label htmlFor="email" className={label}>
+                  Email
+                </label>
+                <input
+                  id="email"
+                  required
+                  disabled={busy}
+                  className={input}
+                  type="email"
+                  autoComplete="username"
+                  placeholder="you@ubcbiztech.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
               <div className="mt-5">
-                <label className={label}>Password</label>
-                <input className={input} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <label htmlFor="password" className={label}>
+                  Password
+                </label>
+                <input
+                  id="password"
+                  required
+                  disabled={busy}
+                  className={input}
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
               </div>
-              {err && <p className="mt-2 text-sm text-rose-400">{err}</p>}
+              {err && (
+                <p role="alert" className="mt-2 text-sm text-rose-400">
+                  {err}
+                </p>
+              )}
               <div className="mt-8 flex flex-wrap gap-3">
                 <button type="submit" disabled={busy} className={primary}>
                   {busy ? "Signing in…" : "Continue"}
                 </button>
-                <button type="button" disabled={busy} onClick={googleSignIn} className={secondary}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={googleSignIn}
+                  className={secondary}
+                >
                   Sign in with Google
                 </button>
               </div>
-              <p className="mt-6 text-xs text-slate-500">Only BizTech exec accounts can organize. Judges and teams use a code instead.</p>
+              <p className="mt-6 text-xs text-slate-500">
+                Only BizTech exec accounts can organize. Judges and teams use a
+                code instead.
+              </p>
             </form>
           ) : (
             <form
@@ -178,18 +247,34 @@ export default function Auth() {
                 void codeSignIn();
               }}
             >
-              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">Code</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-50">
+                Code
+              </h2>
               <div className="mt-10">
-                <label className={label}>{roleInfo[role].title} Code</label>
-                <input className={input} placeholder="XXXX-XXXX" autoCapitalize="characters" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} />
-                {err && <p className="mt-2 text-sm text-rose-400">{err}</p>}
+                <label htmlFor="code" className={label}>
+                  {roleInfo[role].title} Code
+                </label>
+                <input
+                  id="code"
+                  required
+                  disabled={busy}
+                  spellCheck={false}
+                  className={input}
+                  placeholder="Your access code"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+                {err && (
+                  <p role="alert" className="mt-2 text-sm text-rose-400">
+                    {err}
+                  </p>
+                )}
               </div>
               <div className="mt-8 flex flex-wrap gap-3">
                 <button type="submit" disabled={busy} className={primary}>
                   {busy ? "Signing in…" : "Continue"}
-                </button>
-                <button type="button" onClick={() => router.push("/results")} className={secondary}>
-                  View Results
                 </button>
               </div>
             </form>

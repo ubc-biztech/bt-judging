@@ -13,7 +13,9 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Inter", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Inter",
+    system-ui, sans-serif;
   background: var(--paper);
   color: var(--ink);
 }
@@ -21,4 +23,65 @@ body {
 ::selection {
   background: rgba(43, 127, 255, 0.25);
   color: var(--ink);
+}
+
+/* Shared controls keep keyboard focus and small-screen forms consistent. */
+.ux-primary,
+.ux-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ux-primary {
+  background: var(--blue);
+  color: white;
+}
+.ux-primary:hover {
+  background: var(--blue-2);
+}
+.ux-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.ux-primary:disabled,
+.ux-secondary:disabled,
+fieldset:disabled {
+  opacity: 0.6;
+}
+.ux-input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+.ux-label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+button:not(:disabled),
+summary,
+select:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+fieldset {
+  min-width: 0;
 }

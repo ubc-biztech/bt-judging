@@ -1,18 +1,19 @@
 "use client";
 
 import { useMemo } from "react";
+import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
 import { usePoll } from "@/lib/usePoll";
-import { eventOrEmpty } from "@/lib/bt";
+import { errorMessage, eventOrEmpty } from "@/lib/bt";
 
 function Page() {
-  const { data: doc, loading } = usePoll(eventOrEmpty, []);
+  const { data: doc, loading, error, refresh } = usePoll(eventOrEmpty, []);
   const serverRubric = doc?.rubric ?? null;
   const rubric = useMemo(
     () => (serverRubric ? normalizeRubric(serverRubric) : null),
-    [serverRubric]
+    [serverRubric],
   );
 
   const totalMax = rubric ? rubricTotalMax(rubric) : 0;
@@ -30,6 +31,7 @@ function Page() {
             </span>
           </div>
 
+          <Status error={error ? errorMessage(error) : ""} onRetry={refresh} />
           {rubric ? (
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               {rubric.criteria.map((criterion) => (
@@ -53,7 +55,11 @@ function Page() {
             </div>
           ) : (
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">
-              {loading ? "Loading rubric…" : "The organizers have not set a rubric yet."}
+              {loading
+                ? "Loading rubric…"
+                : error
+                  ? ""
+                  : "The organizers have not set a rubric yet."}
             </div>
           )}
         </section>

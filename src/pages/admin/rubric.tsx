@@ -1,15 +1,11 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import {
-  normalizeRubric
-} from "@/lib/judging";
+import { Status } from "@/components/Feedback";
+import { normalizeRubric } from "@/lib/judging";
 import type { Rubric } from "@ubc-biztech/sdk";
-import type { Criterion } from "@/lib/types";
 import { loadEvent, setRubric as saveRubric, errorMessage } from "@/lib/bt";
-
 export default function RubricPage() {
   return (
     <RoleGate allow={["admin"]}>
@@ -19,213 +15,208 @@ export default function RubricPage() {
     </RoleGate>
   );
 }
-
 function Page() {
-  const [rubric, setRubric] = useState<Rubric>(normalizeRubric());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const existing = (await loadEvent())?.rubric ?? null;
-        setRubric(existing ? normalizeRubric(existing) : normalizeRubric());
-      } catch (e) {
-        setError(errorMessage(e));
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  function addCrit() {
-    setRubric((r) => ({
-      ...r,
-      criteria: [
-        ...r.criteria,
-        {
-          id: crypto.randomUUID().slice(0, 8),
-          label: "New criterion",
-          description: "",
-          weight: 1,
-          maxScore: r.scaleMax
-        }
-      ]
-    }));
-  }
-  function updateCrit(i: number, patch: Partial<Criterion>) {
-    setRubric((r) => {
-      const arr = r.criteria.slice();
-      arr[i] = { ...arr[i], ...patch };
-      return { ...r, criteria: arr };
-    });
-  }
-  function removeCrit(i: number) {
-    setRubric((r) => ({
-      ...r,
-      criteria: r.criteria.filter((_, idx) => idx !== i)
-    }));
-  }
-  async function save() {
-    setError(null);
-    const normalized = normalizeRubric(rubric);
+  const [rubric, setRubric] = useState<Rubric | null>(null);
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  async function load() {
+    setError("");
     try {
-      const saved = await saveRubric(normalized);
-      setRubric(normalizeRubric(saved.rubric));
-      alert("Rubric saved");
+      const existing = (await loadEvent())?.rubric;
+      const r = normalizeRubric(existing);
+      setRubric(r);
+      setSaved(existing ? JSON.stringify(r) : "");
     } catch (e) {
       setError(errorMessage(e));
     }
   }
-
-  if (loading) return null;
-
+  useEffect(() => {
+    void load();
+  }, []);
+  const dirty = !!rubric && JSON.stringify(rubric) !== saved;
+  async function save() {
+    if (!rubric || busy) return;
+    setNotice("");
+    setError("");
+    if (
+      !rubric.name.trim() ||
+      !rubric.criteria.length ||
+      rubric.criteria.some((c) => !c.label.trim())
+    ) {
+      setError("Name the rubric and include at least one named criterion.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const d = await saveRubric(normalizeRubric(rubric));
+      const r = normalizeRubric(d.rubric);
+      setRubric(r);
+      setSaved(JSON.stringify(r));
+      setNotice("Rubric saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!rubric) return <Status loading={!error} error={error} onRetry={load} />;
+  const update = (i: number, patch: Partial<Rubric["criteria"][number]>) =>
+    setRubric({
+      ...rubric,
+      criteria: rubric.criteria.map((c, n) =>
+        n === i ? { ...c, ...patch } : c,
+      ),
+    });
   return (
-    <div className="max-w-5xl">
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Rubric</h1>
-
-      <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <div>
-            <label className="text-sm font-medium text-slate-200">Name</label>
-            <input
-              className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none"
-              value={rubric.name}
-              onChange={(e) => setRubric((r) => ({ ...r, name: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-200">Default max score</label>
-            <input
-              type="number"
-              min={1}
-              className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 focus:border-white/20 focus:outline-none"
-              value={rubric.scaleMax}
-              onChange={(e) =>
-                setRubric((r) => ({
-                  ...r,
-                  scaleMax: Math.max(1, Math.round(Number(e.target.value || 1)))
-                }))
-              }
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xl font-semibold text-slate-50">Criteria</div>
-            <p className="mt-1 text-sm text-slate-400">
-              Define the categories judges will score against.
-            </p>
-          </div>
-          <button
-            onClick={addCrit}
-            className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08]"
-          >
-            Add Criterion
+    <form
+      data-unsaved={dirty}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+      className="max-w-4xl space-y-5"
+    >
+      <h1 className="text-3xl font-semibold">Rubric</h1>
+      <Status error={error} notice={!dirty ? notice : ""} />
+      <fieldset disabled={busy} className="space-y-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className="ux-primary" disabled={!dirty}>
+            {busy ? "Saving…" : "Save rubric"}
           </button>
-        </div>
-
-        <div className="space-y-3">
-          {rubric.criteria.map((c, i) => (
-            <div
-              key={c.id}
-              className="rounded-xl border border-white/10 bg-white/[0.03] p-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]"
-            >
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_9rem_10rem_minmax(0,1fr)_auto]">
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                    Label
-                  </label>
-                  <input
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100 focus:border-white/20 focus:outline-none"
-                    value={c.label}
-                    onChange={(e) => updateCrit(i, { label: e.target.value })}
-                  />
-                  <label className="mt-3 block text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                    Description
-                  </label>
-                  <textarea
-                    rows={4}
-                    className="mt-2 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 py-2 text-sm text-slate-100 focus:border-white/20 focus:outline-none"
-                    value={c.description || ""}
-                    onChange={(e) =>
-                      updateCrit(i, { description: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                    Weight
-                  </label>
-                  <input
-                    type="number"
-                    min={0.1}
-                    step="0.1"
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100 focus:border-white/20 focus:outline-none"
-                    value={c.weight}
-                    onChange={(e) =>
-                      updateCrit(i, { weight: Number(e.target.value || 1) })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                    Max Score
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100 focus:border-white/20 focus:outline-none"
-                    value={c.maxScore ?? rubric.scaleMax}
-                    onChange={(e) =>
-                      updateCrit(i, {
-                        maxScore: Math.max(1, Math.round(Number(e.target.value || 1)))
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                    ID
-                  </label>
-                  <input
-                    disabled
-                    className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-xs font-mono text-slate-500 opacity-80"
-                    value={c.id}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={() => removeCrit(i)}
-                    className="h-10 rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/15"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-          {rubric.criteria.length === 0 && (
-            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400">
-              No criteria yet. Add your first scoring category.
-            </div>
+          {dirty && (
+            <>
+              <span className="text-sm text-amber-300">Unsaved changes</span>
+              <button
+                type="button"
+                className="ux-secondary"
+                onClick={() => {
+                  if (confirm("Discard changes and reload?")) void load();
+                }}
+              >
+                Discard
+              </button>
+            </>
           )}
         </div>
-      </div>
-
-      {error && <div className="mt-6 text-sm text-rose-300">{error}</div>}
-
-      <div className="mt-8">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="ux-label">
+            Rubric name
+            <input
+              className="ux-input"
+              required
+              value={rubric.name}
+              onChange={(e) => setRubric({ ...rubric, name: e.target.value })}
+            />
+          </label>
+          <label className="ux-label">
+            Default maximum score
+            <input
+              className="ux-input"
+              type="number"
+              min={1}
+              step={1}
+              required
+              value={rubric.scaleMax}
+              onChange={(e) =>
+                setRubric({ ...rubric, scaleMax: Number(e.target.value) })
+              }
+            />
+          </label>
+        </div>
+        {rubric.criteria.map((c, i) => (
+          <section
+            key={c.id}
+            className="rounded-xl border border-white/10 p-4 space-y-3"
+          >
+            <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+              <label className="ux-label">
+                Criterion {i + 1}
+                <input
+                  className="ux-input"
+                  required
+                  value={c.label}
+                  onChange={(e) => update(i, { label: e.target.value })}
+                />
+              </label>
+              <label className="ux-label">
+                Maximum score
+                <input
+                  className="ux-input"
+                  required
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={c.maxScore ?? rubric.scaleMax}
+                  onChange={(e) =>
+                    update(i, { maxScore: Number(e.target.value) })
+                  }
+                />
+              </label>
+            </div>
+            <label className="ux-label">
+              Scoring guide
+              <textarea
+                className="ux-input"
+                rows={3}
+                value={c.description ?? ""}
+                onChange={(e) => update(i, { description: e.target.value })}
+              />
+            </label>
+            {rubric.scoreMode === "weighted" && (
+              <label className="ux-label">
+                Weight
+                <input
+                  className="ux-input"
+                  type="number"
+                  min={0.1}
+                  step={0.1}
+                  required
+                  value={c.weight}
+                  onChange={(e) =>
+                    update(i, { weight: Number(e.target.value) })
+                  }
+                />
+              </label>
+            )}
+            <button
+              type="button"
+              className="text-sm text-rose-300"
+              onClick={() => {
+                if (confirm(`Remove “${c.label}” from the rubric?`))
+                  setRubric({
+                    ...rubric,
+                    criteria: rubric.criteria.filter((_, n) => n !== i),
+                  });
+              }}
+            >
+              Remove criterion
+            </button>
+          </section>
+        ))}
         <button
-          onClick={save}
-          className="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-slate-200"
+          type="button"
+          className="ux-secondary"
+          onClick={() =>
+            setRubric({
+              ...rubric,
+              criteria: [
+                ...rubric.criteria,
+                {
+                  id: crypto.randomUUID().slice(0, 8),
+                  label: "",
+                  description: "",
+                  weight: 1,
+                  maxScore: rubric.scaleMax,
+                },
+              ],
+            })
+          }
         >
-          Save Rubric
+          Add criterion
         </button>
-      </div>
-    </div>
+      </fieldset>
+    </form>
   );
 }

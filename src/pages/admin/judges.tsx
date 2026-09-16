@@ -1,13 +1,21 @@
 // pages/admin/judges.tsx
 "use client";
 
+import { CopyButton, Status } from "@/components/Feedback";
+import { withoutJudge } from "@/lib/ux";
+import { excludeFromBlock } from "@/lib/schedule";
 import dynamic from "next/dynamic";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
 import type { Judge, JudgingTeam } from "@ubc-biztech/sdk";
 import { eventOrEmpty, saveEvent, setJudges, errorMessage } from "@/lib/bt";
-import { CODE_PRESETS, normalizeCode, presetCodes, type CodePreset } from "@/lib/codes";
+import {
+  CODE_PRESETS,
+  normalizeCode,
+  presetCodes,
+  type CodePreset,
+} from "@/lib/codes";
 
 function AdminJudgesInner() {
   return (
@@ -23,6 +31,9 @@ function Page() {
   const [list, setList] = useState<Judge[]>([]);
   const [teams, setTeams] = useState<JudgingTeam[]>([]);
   const [preset, setPreset] = useState<CodePreset>("first");
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newJ, setNewJ] = useState({ name: "" });
@@ -32,12 +43,14 @@ function Page() {
   const [created, setCreated] = useState<Judge | null>(null);
 
   async function load() {
-    setLoading(true);
     try {
       const doc = await eventOrEmpty();
+      setLoaded(true);
       setList(doc.judges);
       setTeams(doc.teams);
-      setCreated((current) => current ? doc.judges.find((j) => j.id === current.id) ?? null : null);
+      setCreated((current) =>
+        current ? (doc.judges.find((j) => j.id === current.id) ?? null) : null,
+      );
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -49,12 +62,18 @@ function Page() {
   }, []);
 
   async function run(fn: () => Promise<unknown>) {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
     try {
       await fn();
       setError(null);
       await load();
+      setNotice("Changes saved.");
     } catch (e) {
       setError(errorMessage(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -69,7 +88,11 @@ function Page() {
         const saved = await saveEvent((doc) => {
           doc.judges.forEach((j) => before.add(j.id));
           const taken = [...doc.judges, ...doc.teams].map((x) => x.code ?? "");
-          const additions = presetCodes([{ name, assignedTeamIds: [] }], taken, preset);
+          const additions = presetCodes(
+            [{ name, assignedTeamIds: [] }],
+            taken,
+            preset,
+          );
           return { ...doc, judges: [...doc.judges, ...additions] };
         });
         setCreated(saved.judges.find((x) => !before.has(x.id)) ?? null);
@@ -94,40 +117,102 @@ function Page() {
   }
 
   async function saveJudge(j: Judge) {
+    if (!j.name.trim()) return setError("Enter a judge name.");
     const code = normalizeCode(j.code ?? "");
-    const clash = [...list.filter((x) => x.id !== j.id), ...teams].some((x) => x.code && normalizeCode(x.code) === code);
-    if (code && clash) return setError(`Code ${code} is already used by another judge or team.`);
-    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, name: j.name, code: code || x.code } : x))));
+    const clash = [...list.filter((x) => x.id !== j.id), ...teams].some(
+      (x) => x.code && normalizeCode(x.code) === code,
+    );
+    if (code && clash)
+      return setError(`Code ${code} is already used by another judge or team.`);
+    await run(() =>
+      setJudges((js) =>
+        js.map((x) =>
+          x.id === j.id
+            ? { ...x, name: j.name.trim(), code: code || x.code }
+            : x,
+        ),
+      ),
+    );
   }
 
   async function applyPreset() {
-    if (!confirm(`Replace every judge's code using "${CODE_PRESETS.find((p) => p.id === preset)?.label}"? Judges will need the new code to sign in.`)) return;
-    await run(() => setJudges((js) => presetCodes(js, teams.map((t) => t.code ?? ""), preset)));
+    if (document.querySelector('tbody [data-unsaved="true"]'))
+      return setError("Save or discard row edits before replacing all codes.");
+    if (
+      !confirm(
+        `Replace every judge's code using "${CODE_PRESETS.find((p) => p.id === preset)?.label}"? Judges will need the new code to sign in.`,
+      )
+    )
+      return;
+    await run(() =>
+      saveEvent((d) => ({
+        ...d,
+        judges: presetCodes(
+          d.judges,
+          d.teams.map((t) => t.code ?? ""),
+          preset,
+        ),
+      })),
+    );
   }
 
   async function resetAssignments(j: Judge) {
-    await run(() => setJudges((js) => js.map((x) => (x.id === j.id ? { ...x, assignedTeamIds: [] } : x))));
+    if (
+      !confirm(
+        `Reset all assignments for ${j.name}? Their saved reviews will remain.`,
+      )
+    )
+      return;
+    await run(() =>
+      saveEvent((d) => {
+        const s = d.settings.schedule;
+        return {
+          ...d,
+          judges: d.judges.map((x) =>
+            x.id === j.id ? { ...x, assignedTeamIds: [] } : x,
+          ),
+          settings: {
+            ...d.settings,
+            ...(s?.blocks.length
+              ? { schedule: excludeFromBlock(s, j.id, s.blocks[0].id) }
+              : {}),
+          },
+        };
+      }),
+    );
   }
 
   async function removeJudge(j: Judge) {
     if (!confirm(`Delete judge "${j.name}"?`)) return;
-    await run(() => setJudges((js) => js.filter((x) => x.id !== j.id)));
+    await run(() => saveEvent((d) => withoutJudge(d, j.id)));
   }
 
+  if (!loaded) return <Status loading={loading} error={error} onRetry={load} />;
   return (
-    <div className="max-w-6xl">
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Judges</h1>
+    <fieldset disabled={busy} className="max-w-6xl">
+      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
+        Judges
+      </h1>
 
       <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-semibold text-slate-50">Create Judge</div>
+            <div className="text-lg font-semibold text-slate-50">
+              Create Judge
+            </div>
             <p className="mt-1 text-sm text-slate-400">
               Add a judge by name. Their access code uses the selected preset.
             </p>
           </div>
         </div>
-        <form className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center" onSubmit={(e) => { e.preventDefault(); void createJudge(); }}>
+        <form
+          data-unsaved={!!newJ.name}
+          className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void createJudge();
+          }}
+        >
           <input
             className="h-11 min-w-0 rounded-lg border border-white/10 bg-[#0b0b0c] px-4 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none xl:flex-1"
             placeholder="Name"
@@ -162,13 +247,15 @@ function Page() {
             </button>
           </div>
         )}
-        {error && <div className="mt-4 text-sm text-rose-300">{error}</div>}
+        <Status error={error} notice={notice} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div className="mr-auto">
           <div className="text-sm font-semibold text-slate-50">Presets</div>
-          <p className="mt-0.5 text-xs text-slate-400">{CODE_PRESETS.find((p) => p.id === preset)?.hint}</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            {CODE_PRESETS.find((p) => p.id === preset)?.hint}
+          </p>
         </div>
         <select
           className="h-9 rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
@@ -183,7 +270,11 @@ function Page() {
             </option>
           ))}
         </select>
-        <button onClick={applyPreset} disabled={list.length === 0} className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50">
+        <button
+          onClick={applyPreset}
+          disabled={list.length === 0}
+          className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-100 transition hover:bg-white/[0.08] disabled:opacity-50"
+        >
           Apply to all judges
         </button>
       </div>
@@ -206,17 +297,16 @@ function Page() {
                 </td>
               </tr>
             )}
-            {!loading &&
-              list.map((j) => (
-                <Row
-                  key={j.id}
-                  j={j}
-                  onSave={saveJudge}
-                  onReset={resetAssignments}
-                  onDelete={removeJudge}
-                />
-              ))}
-            {!loading && list.length === 0 && (
+            {list.map((j) => (
+              <Row
+                key={j.id}
+                j={j}
+                onSave={saveJudge}
+                onReset={resetAssignments}
+                onDelete={removeJudge}
+              />
+            ))}
+            {list.length === 0 && (
               <tr>
                 <td
                   className="px-4 py-4 text-gray-500 dark:text-gray-400"
@@ -229,7 +319,7 @@ function Page() {
           </tbody>
         </table>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -237,7 +327,7 @@ function Row({
   j,
   onSave,
   onReset,
-  onDelete
+  onDelete,
 }: {
   j: Judge;
   onSave: (j: Judge) => Promise<void>;
@@ -245,12 +335,26 @@ function Row({
   onDelete: (j: Judge) => Promise<void>;
 }) {
   const [edit, setEdit] = useState(j);
-  useEffect(() => setEdit(j), [j]);
+  const seed = JSON.stringify([j.name, j.code]);
+  useEffect(() => {
+    setEdit(j);
+  }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dirty = edit.name !== j.name || edit.code !== j.code;
   return (
-    <tr className="border-t border-gray-100 dark:border-white/10">
+    <tr
+      data-unsaved={dirty}
+      className="border-t border-gray-100 dark:border-white/10"
+    >
       <td className="px-4 py-2">
         <input
           className="w-full min-w-40 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
+          aria-label={`Name for ${j.name}`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void onSave(edit);
+            }
+          }}
           value={edit.name}
           onChange={(e) => setEdit({ ...edit, name: e.target.value })}
         />
@@ -258,12 +362,15 @@ function Row({
       <td className="px-4 py-2">
         <input
           className="w-40 rounded-md border border-gray-200 px-2 py-1 font-mono text-sm tracking-wider dark:border-white/10 dark:bg-transparent"
+          aria-label={`Code for ${j.name}`}
           value={edit.code ?? ""}
           onChange={(e) => setEdit({ ...edit, code: e.target.value })}
-          onBlur={(e) => setEdit({ ...edit, code: normalizeCode(e.target.value) })}
+          onBlur={(e) =>
+            setEdit({ ...edit, code: normalizeCode(e.target.value) })
+          }
         />
       </td>
-      <td className="px-4 py-2">{edit.assignedTeamIds?.length ?? 0}</td>
+      <td className="px-4 py-2">{j.assignedTeamIds?.length ?? 0}</td>
       <td className="px-4 py-2">
         <div className="flex gap-2 whitespace-nowrap">
           <button
@@ -274,10 +381,17 @@ function Row({
           </button>
           <button
             className="rounded-lg border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
+            disabled={!dirty}
             onClick={() => onSave(edit)}
           >
             Save Changes
           </button>
+          <CopyButton value={j.code ?? ""} />
+          {dirty && (
+            <button onClick={() => setEdit(j)} className="text-xs underline">
+              Discard
+            </button>
+          )}
           <button
             className="rounded-lg bg-rose-600 px-3 py-1 text-xs font-semibold text-white"
             onClick={() => onDelete(edit)}

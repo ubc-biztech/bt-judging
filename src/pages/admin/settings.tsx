@@ -1,19 +1,20 @@
 "use client";
-
-import Layout from "@/components/Layout";
-import RoleGate from "@/components/RoleGate";
 import { useEffect, useState } from "react";
 import type { JudgingSettings as Settings } from "@ubc-biztech/sdk";
-import type { Phase } from "@/lib/types";
-import { patchSettings, errorMessage, settingsOrDefaults, DEFAULT_SETTINGS, PHASES } from "@/lib/bt";
-
-const PHASE_LABELS: Record<Phase, string> = {
-  submission: "Submission",
-  prelim: "Preliminary judging",
-  finals: "Finals",
-  closed: "Closed",
-};
-
+import Layout from "@/components/Layout";
+import RoleGate from "@/components/RoleGate";
+import { Status } from "@/components/Feedback";
+import { settingsOrDefaults, patchSettings, errorMessage } from "@/lib/bt";
+const EDITABLE = [
+  "eventName",
+  "perTeamJudges",
+  "maxImages",
+  "finalsTopN",
+  "lockSubmissions",
+  "showTeamFeedback",
+  "allowJudgeSeeOthers",
+  "anonymizeTeams",
+] as const;
 export default function AdminSettings() {
   return (
     <RoleGate allow={["admin"]}>
@@ -23,173 +24,171 @@ export default function AdminSettings() {
     </RoleGate>
   );
 }
-
 function Page() {
-  const [s, setS] = useState<Settings>(DEFAULT_SETTINGS);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setS(await settingsOrDefaults());
-      } catch (e) {
-        setError(errorMessage(e));
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  async function save() {
-    setError(null);
+  const [saved, setSaved] = useState<Settings | null>(null);
+  const [s, setS] = useState<Settings | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
     try {
-      const saved = await patchSettings(s);
-      setS(saved.settings);
-      alert("Settings saved");
+      const next = await settingsOrDefaults();
+      setS(next);
+      setSaved(next);
+      setError("");
     } catch (e) {
       setError(errorMessage(e));
     }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const dirty = !!s && !!saved && EDITABLE.some((key) => s[key] !== saved[key]);
+  async function save() {
+    if (!s || !saved || busy) return;
+    if (!s.eventName.trim()) {
+      setError("Enter an event name.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      // Only changed controls are patched; schedule and finals selections may have changed elsewhere.
+      const patch = Object.fromEntries(
+        EDITABLE.filter((key) => s[key] !== saved[key]).map((key) => [
+          key,
+          key === "eventName" ? s.eventName.trim() : s[key],
+        ]),
+      );
+      const result = await patchSettings(patch);
+      setS(result.settings);
+      setSaved(result.settings);
+      setNotice("Settings saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   }
-
-  if (loading) return null;
-
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-3xl font-semibold tracking-tight text-slate-50">Event Settings</h1>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="text-sm font-medium">Event name</label>
-          <input
-            className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.eventName}
-            onChange={(e) => setS((v) => ({ ...v, eventName: e.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Phase</label>
-          <select
-            className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.phase}
-            onChange={(e) =>
-              setS((v) => ({
-                ...v,
-                phase: e.target.value as Phase
-              }))
-            }
+    <div className="max-w-3xl" data-unsaved={dirty}>
+      <h1 className="text-3xl font-semibold">Event Settings</h1>
+      <Status
+        error={error}
+        notice={dirty ? "" : notice}
+        loading={!s && !error}
+        onRetry={!s ? load : undefined}
+      />
+      {s && (
+        <>
+          <form
+            className="mt-6"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
           >
-            {PHASES.map((p) => (
-              <option key={p} value={p}>
-                {PHASE_LABELS[p]}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">
-            Required judges per team
-          </label>
-          <input
-            type="number"
-            min={1}
-            className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.perTeamJudges ?? 3}
-            onChange={(e) =>
-              setS((v) => ({
-                ...v,
-                perTeamJudges: Math.max(1, Number(e.target.value || 1))
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Max images per team</label>
-          <input
-            type="number"
-            min={0}
-            className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.maxImages}
-            onChange={(e) =>
-              setS((v) => ({
-                ...v,
-                maxImages: Math.max(0, Number(e.target.value || 0))
-              }))
-            }
-          />
-        </div>
-
-        <div>
-          <label className="text-sm font-medium">Finalists (top N)</label>
-          <input
-            type="number"
-            min={1}
-            className="mt-1 w-32 rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-            value={s.finalsTopN ?? 5}
-            onChange={(e) =>
-              setS((v) => ({
-                ...v,
-                finalsTopN: Math.max(1, Number(e.target.value || 1))
-              }))
-            }
-          />
-        </div>
-
-        <label className="mt-2 inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={s.lockSubmissions}
-            onChange={(e) =>
-              setS((v) => ({ ...v, lockSubmissions: e.target.checked }))
-            }
-          />
-          Lock team submissions
-        </label>
-
-        <label className="mt-2 inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={s.showTeamFeedback}
-            onChange={(e) =>
-              setS((v) => ({ ...v, showTeamFeedback: e.target.checked }))
-            }
-          />
-          Teams can view own feedback
-        </label>
-
-        <label className="mt-2 inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={s.allowJudgeSeeOthers}
-            onChange={(e) =>
-              setS((v) => ({ ...v, allowJudgeSeeOthers: e.target.checked }))
-            }
-          />
-          Judges can see others’ scores
-        </label>
-
-        <label className="mt-2 inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={s.anonymizeTeams}
-            onChange={(e) =>
-              setS((v) => ({ ...v, anonymizeTeams: e.target.checked }))
-            }
-          />
-          Anonymize team names for judges
-        </label>
-      </div>
-
-      {error && <div className="mt-4 text-sm text-red-500">{error}</div>}
-
-      <div className="mt-6">
-        <button
-          onClick={save}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-        >
-          Save settings
-        </button>
-      </div>
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={!dirty || busy}
+                className="ux-primary"
+              >
+                {busy ? "Saving…" : "Save settings"}
+              </button>
+              {dirty && (
+                <>
+                  <span className="text-sm text-amber-300">
+                    Unsaved changes
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="ux-secondary"
+                    onClick={() => {
+                      setS(saved);
+                      setError("");
+                    }}
+                  >
+                    Discard
+                  </button>
+                </>
+              )}
+            </div>
+            <fieldset disabled={busy} className="space-y-6">
+              <label className="ux-label">
+                Event name
+                <input
+                  className="ux-input"
+                  required
+                  value={s.eventName}
+                  onChange={(e) => setS({ ...s, eventName: e.target.value })}
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(
+                  [
+                    ["perTeamJudges", "Judges per team", 1, 3],
+                    ["maxImages", "Images per team", 0, 10],
+                    ["finalsTopN", "Finalists to select", 1, 5],
+                  ] as const
+                ).map(([key, label, min, fallback]) => (
+                  <label key={key} className="ux-label">
+                    {label}
+                    <input
+                      type="number"
+                      min={min}
+                      step={1}
+                      required
+                      className="ux-input"
+                      value={s[key] ?? fallback}
+                      onChange={(e) =>
+                        setS({ ...s, [key]: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-4">
+                {(
+                  [
+                    [
+                      "lockSubmissions",
+                      "Lock team submissions",
+                      "Overrides the submissions-open phase.",
+                    ],
+                    ["showTeamFeedback", "Show teams their feedback", ""],
+                    [
+                      "allowJudgeSeeOthers",
+                      "Show judges other judges’ scores",
+                      "",
+                    ],
+                    ["anonymizeTeams", "Hide team names from judges", ""],
+                  ] as const
+                ).map(([key, label, hint]) => (
+                  <label key={key} className="flex items-start gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={s[key]}
+                      onChange={(e) => setS({ ...s, [key]: e.target.checked })}
+                    />
+                    <span>
+                      {label}
+                      {hint && (
+                        <span className="mt-1 block text-xs text-slate-400">
+                          {hint}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </form>
+        </>
+      )}
     </div>
   );
 }

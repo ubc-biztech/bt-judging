@@ -1,356 +1,138 @@
 "use client";
-
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { OFFICIAL_JUDGING_RUBRIC } from "@/lib/judging";
-import { eventOrEmpty, listReviews } from "@/lib/bt";
+import PhaseControl from "@/components/PhaseControl";
+import { Status } from "@/components/Feedback";
+import { eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
+import { usePoll } from "@/lib/usePoll";
+import { setupSteps } from "@/lib/ux";
 
-type Snapshot = {
-  eventName: string;
-  phase: string;
-  requiredJudgeCount: number;
-  teams: number;
-  judges: number;
-  rubricCriteria: number;
-  prelimReviews: number;
-  assignedTeams: number;
-  underCoveredTeams: number;
-  finalists: number;
-  finalsJudges: number;
-};
-
-type NextAction = {
-  href: string;
-  label: string;
-  detail: string;
-};
-
-export default dynamic(() => Promise.resolve(AdminHome), { ssr: false });
-
-function AdminHome() {
-  const [data, setData] = useState<Snapshot>({
-    eventName: "Event",
-    phase: "submission",
-    requiredJudgeCount: 3,
-    teams: 0,
-    judges: 0,
-    rubricCriteria: 0,
-    prelimReviews: 0,
-    assignedTeams: 0,
-    underCoveredTeams: 0,
-    finalists: 0,
-    finalsJudges: 0
-  });
-
-  useEffect(() => {
-    (async () => {
-      const [doc, reviews] = await Promise.all([eventOrEmpty(), listReviews({ round: "prelim" })]);
-      const { settings, rubric, teams, judges } = doc;
-
-      const rubricCriteriaCount =
-        rubric?.criteria.length || OFFICIAL_JUDGING_RUBRIC.criteria.length;
-      const requiredJudgeCount = settings.perTeamJudges ?? 3;
-
-      const coverage: Record<string, number> = {};
-      for (const judge of judges) {
-        for (const teamId of judge.assignedTeamIds ?? []) {
-          coverage[teamId] = (coverage[teamId] || 0) + 1;
-        }
-      }
-
-      let assignedTeams = 0;
-      let underCoveredTeams = 0;
-      for (const team of teams) {
-        const count = coverage[team.id] || 0;
-        if (count > 0) assignedTeams += 1;
-        if (count < requiredJudgeCount) underCoveredTeams += 1;
-      }
-
-      setData({
-        eventName: settings.eventName.trim() || "Event",
-        phase: settings.phase,
-        requiredJudgeCount,
-        teams: teams.length,
-        judges: judges.length,
-        rubricCriteria: rubricCriteriaCount,
-        prelimReviews: reviews.length,
-        assignedTeams,
-        underCoveredTeams,
-        finalists: settings.finalsTeamIds.length,
-        finalsJudges: settings.finalsJudgeIds.length
-      });
-    })().catch(() => {
-      // Leave the defaults in place; the readiness list then points at setup.
-    });
+export default dynamic(
+  () =>
+    Promise.resolve(() => (
+      <RoleGate allow={["admin"]}>
+        <Layout>
+          <Page />
+        </Layout>
+      </RoleGate>
+    )),
+  { ssr: false },
+);
+function Page() {
+  const poll = usePoll(async () => {
+    const [doc, reviews] = await Promise.all([eventOrEmpty(), listReviews()]);
+    return { doc, reviews };
   }, []);
-
-  const phaseLabel = useMemo(() => {
-    if (data.phase === "finals") return "Finals";
-    if (data.phase === "prelim") return "Prelim";
-    if (data.phase === "closed") return "Closed";
-    return "Submission";
-  }, [data.phase]);
-
-  const nextAction = useMemo<NextAction>(() => {
-    if (data.rubricCriteria === 0) {
-      return {
-        href: "/admin/rubric",
-        label: "Set rubric",
-        detail: "Add scoring criteria before judges start reviewing."
-      };
-    }
-    if (data.judges === 0) {
-      return {
-        href: "/admin/judges",
-        label: "Add judges",
-        detail: "Create judge accounts before assignments."
-      };
-    }
-    if (data.teams === 0) {
-      return {
-        href: "/admin/teams",
-        label: "Add teams",
-        detail: "Teams need to exist before they can be assigned or scored."
-      };
-    }
-    if (data.assignedTeams < data.teams || data.underCoveredTeams > 0) {
-      return {
-        href: "/admin/schedule",
-        label: "Finish the schedule",
-        detail: `${data.underCoveredTeams} team${data.underCoveredTeams === 1 ? "" : "s"} still below coverage.`
-      };
-    }
-    if (data.prelimReviews === 0) {
-      return {
-        href: "/results",
-        label: "Watch prelim scoring",
-        detail: "Assignments are ready. Judges can begin reviewing."
-      };
-    }
-    if (data.finalists === 0 || data.finalsJudges === 0) {
-      return {
-        href: "/admin/finals",
-        label: "Prepare finals",
-        detail: "Choose finalists and finals judges when prelim is complete."
-      };
-    }
-    return {
-      href: "/results",
-      label: "Review results",
-      detail: "Prelim and finals setup are in place."
-    };
-  }, [data]);
-
-  const readiness = [
-    {
-      label: "Rubric",
-      value:
-        data.rubricCriteria > 0
-          ? `${data.rubricCriteria} criteria`
-          : "Not set",
-      href: "/admin/rubric",
-      action: data.rubricCriteria > 0 ? "Edit" : "Set up",
-      ok: data.rubricCriteria > 0
-    },
-    {
-      label: "Judges",
-      value: `${data.judges} added`,
-      href: "/admin/judges",
-      action: "Manage",
-      ok: data.judges > 0
-    },
-    {
-      label: "Teams",
-      value: `${data.teams} added`,
-      href: "/admin/teams",
-      action: "Manage",
-      ok: data.teams > 0
-    },
-    {
-      label: "Schedule",
-      value:
-        data.teams === 0
-          ? "Waiting on teams"
-          : `${data.assignedTeams}/${data.teams} scheduled`,
-      href: "/admin/schedule",
-      action: "Open",
-      ok: data.teams > 0 && data.underCoveredTeams === 0
-    },
-    {
-      label: "Finals",
-      value: `${data.finalists} teams • ${data.finalsJudges} judges`,
-      href: "/admin/finals",
-      action: "Open",
-      ok: data.finalists > 0 && data.finalsJudges > 0
-    }
-  ];
-
+  const doc = poll.data?.doc;
+  const reviews = poll.data?.reviews ?? [];
+  const steps = doc ? setupSteps(doc) : [];
+  const missing = steps.filter((s) => !s.done);
+  const expected =
+    doc?.judges.reduce(
+      (sum, j) =>
+        sum +
+        (j.assignedTeamIds ?? []).filter((id) =>
+          doc.teams.some((t) => t.id === id),
+        ).length,
+      0,
+    ) ?? 0;
+  const completed = reviews.filter(
+    (r) =>
+      r.round === "prelim" &&
+      doc?.judges.some(
+        (j) => j.id === r.judgeId && j.assignedTeamIds?.includes(r.teamId),
+      ),
+  ).length;
+  const uncovered =
+    doc?.teams.filter(
+      (t) =>
+        doc.judges.filter((j) => j.assignedTeamIds?.includes(t.id)).length <
+        (doc.settings.perTeamJudges ?? 3),
+    ).length ?? 0;
   return (
-    <RoleGate allow={["admin"]}>
-      <Layout>
-        <div className="max-w-6xl space-y-6">
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    {data.eventName}
-                  </p>
-                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-50">
-                    Admin
-                  </h1>
-                </div>
-                <span className="rounded-lg border border-white/10 bg-[#0b0b0c] px-3 py-2 text-sm text-slate-200">
-                  {phaseLabel}
-                </span>
-              </div>
-
-              <div className="mt-6 rounded-lg border border-white/10 bg-[#0b0b0c] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Next
-                </p>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-slate-50">
-                      {nextAction.label}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {nextAction.detail}
-                    </p>
-                  </div>
+    <div className="max-w-6xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-semibold">Dashboard</h1>
+        <button className="ux-secondary" onClick={() => void poll.refresh()}>
+          Refresh
+        </button>
+      </div>
+      <Status
+        error={poll.error ? errorMessage(poll.error) : ""}
+        loading={poll.loading}
+        onRetry={() => void poll.refresh()}
+      />
+      {doc && (
+        <>
+          <PhaseControl doc={doc} onChange={() => void poll.refresh()} />
+          {missing.length > 0 && (
+            <section className="rounded-xl border border-amber-300/30 bg-amber-500/10 p-5">
+              <h2 className="font-semibold">Before judging starts</h2>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {missing.map((step) => (
                   <Link
-                    href={nextAction.href}
-                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-slate-200"
+                    key={step.href}
+                    href={step.href}
+                    className="ux-secondary"
                   >
-                    Open
+                    {step.label} →
                   </Link>
-                </div>
+                ))}
               </div>
-
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
-                <FlowCard
-                  title="Prelim"
-                  value={`${data.prelimReviews} reviews`}
-                  hint={`${data.underCoveredTeams} under-covered teams`}
-                />
-                <FlowCard
-                  title="Finals"
-                  value={`${data.finalists} finalists`}
-                  hint={`${data.finalsJudges} finals judges`}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Event
-                </p>
-                <Link
-                  href="/admin/settings"
-                  className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08]"
-                >
-                  Edit
-                </Link>
-              </div>
-              <div className="mt-4 space-y-4">
-                <StatusRow label="Judges per team" value={String(data.requiredJudgeCount)} />
-                <StatusRow label="Assigned teams" value={`${data.assignedTeams}/${data.teams}`} />
-                <StatusRow
-                  label="Coverage gaps"
-                  value={String(data.underCoveredTeams)}
-                  tone={data.underCoveredTeams > 0 ? "warn" : "default"}
-                />
-                <StatusRow label="Prelim reviews" value={String(data.prelimReviews)} />
-              </div>
-            </div>
+            </section>
+          )}
+          <section className="grid gap-4 sm:grid-cols-3">
+            {[
+              ["Teams", doc.teams.length, "/admin/teams"],
+              ["Judges", doc.judges.length, "/admin/judges"],
+              ["Prelim reviews", `${completed} / ${expected}`, "/results"],
+            ].map(([label, value, href]) => (
+              <Link
+                key={label}
+                href={String(href)}
+                className="rounded-xl border border-white/10 bg-white/[0.03] p-5"
+              >
+                <p className="text-sm text-slate-400">{label}</p>
+                <p className="mt-2 text-2xl font-semibold">{value}</p>
+              </Link>
+            ))}
           </section>
-
-          <section className="rounded-xl border border-white/10 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
-            <div className="border-b border-white/[0.08] px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-50">Readiness</h2>
-            </div>
-            <div className="divide-y divide-white/[0.08]">
-              {readiness.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex flex-wrap items-center justify-between gap-3 px-6 py-4"
+          {uncovered > 0 && (
+            <p className="text-sm text-amber-300">
+              {uncovered} team{uncovered === 1 ? " has" : "s have"} fewer than{" "}
+              {doc.settings.perTeamJudges ?? 3} judges.{" "}
+              <Link className="underline" href="/admin/schedule">
+                Check schedule
+              </Link>
+            </p>
+          )}
+          <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+            <h2 className="font-semibold">Setup</h2>
+            <ul className="mt-3 divide-y divide-gray-100">
+              {steps.map((step) => (
+                <li
+                  key={step.href}
+                  className="flex items-center justify-between gap-4 py-3"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-100">{item.label}</p>
-                    <p className="mt-1 text-sm text-slate-400">{item.value}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={[
-                        "rounded-md px-2.5 py-1 text-xs font-medium",
-                        item.ok
-                          ? "bg-white/[0.06] text-slate-200"
-                          : "bg-amber-500/10 text-amber-300"
-                      ].join(" ")}
-                    >
-                      {item.ok ? "Ready" : "Needs attention"}
-                    </span>
-                    <Link
-                      href={item.href}
-                      className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-100 transition hover:bg-white/[0.08]"
-                    >
-                      {item.action}
-                    </Link>
-                  </div>
-                </div>
+                  <span>{step.label}</span>
+                  <Link
+                    href={step.href}
+                    className={
+                      step.done
+                        ? "text-sm text-slate-400 underline"
+                        : "text-sm font-semibold text-blue-600 underline"
+                    }
+                  >
+                    {step.done ? "Ready · Edit" : "Set up →"}
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
-        </div>
-      </Layout>
-    </RoleGate>
-  );
-}
-
-function FlowCard({
-  title,
-  value,
-  hint
-}: {
-  title: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-[#0b0b0c] p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-        {title}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-slate-50">{value}</p>
-      <p className="mt-1 text-sm text-slate-400">{hint}</p>
-    </div>
-  );
-}
-
-function StatusRow({
-  label,
-  value,
-  tone = "default"
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "warn";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-3 last:border-b-0 last:pb-0">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span
-        className={[
-          "text-sm font-medium",
-          tone === "warn" ? "text-amber-300" : "text-slate-100"
-        ].join(" ")}
-      >
-        {value}
-      </span>
+        </>
+      )}
     </div>
   );
 }

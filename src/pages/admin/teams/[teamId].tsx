@@ -1,795 +1,260 @@
-// pages/admin/teams/[teamId].tsx
 "use client";
-
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import Link from "next/link";
+import type { JudgingEvent, JudgingTeam, Review } from "@ubc-biztech/sdk";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
-import type { Judge, JudgingLink as ExtLink, Review, JudgingSettings as Settings, JudgingTeam as Team } from "@ubc-biztech/sdk";
-import { eventOrEmpty, listReviews, errorMessage, patchSettings, setTeams as saveTeams, setJudges as saveJudges, setLinks as saveLinks, newLinkId } from "@/lib/bt";
-
+import { CopyButton, Status } from "@/components/Feedback";
+import SubmissionFields, {
+  submissionDraft,
+  imageLinks,
+  type SubmissionDraft,
+} from "@/components/SubmissionFields";
+import { eventOrEmpty, listReviews, saveEvent, errorMessage } from "@/lib/bt";
+import { submissionError } from "@/lib/ux";
 export default function AdminTeamDetail() {
+  const router = useRouter();
   return (
     <RoleGate allow={["admin"]}>
       <Layout>
-        <Page />
+        <Page
+          key={String(router.query.teamId)}
+          teamId={String(router.query.teamId ?? "")}
+        />
       </Layout>
     </RoleGate>
   );
 }
-
-function Page() {
-  const router = useRouter();
-  const { teamId } = router.query as { teamId: string };
-
-  const [team, setTeam] = useState<Team | null>(null);
-  const [edit, setEdit] = useState<Team | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [finalsSelected, setFinalsSelected] = useState(false);
-
+function Page({ teamId }: { teamId: string }) {
+  const [doc, setDoc] = useState<JudgingEvent | null>(null);
+  const [team, setTeam] = useState<JudgingTeam | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [judges, setJudges] = useState<Judge[]>([]);
-  const [links, setLinks] = useState<ExtLink[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const [newLink, setNewLink] = useState<{ title: string; url: string }>({
-    title: "",
-    url: ""
-  });
-  const [newImageUrl, setNewImageUrl] = useState("");
-
-  useEffect(() => {
+  const [name, setName] = useState("");
+  const [members, setMembers] = useState("");
+  const [draft, setDraft] = useState<SubmissionDraft>(submissionDraft({}));
+  const [saved, setSaved] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  function seed(t: JudgingTeam) {
+    const d = submissionDraft(t);
+    setTeam(t);
+    setName(t.name);
+    setMembers(t.members.join(", "));
+    setDraft(d);
+    setSaved(JSON.stringify([t.name, t.members.join(", "), d]));
+  }
+  async function load() {
     if (!teamId) return;
-    (async () => {
-      setLoading(true);
-      try {
-        // Organizers read the whole event document (settings, teams, judges, links) in one call.
-        const [doc, rs] = await Promise.all([eventOrEmpty(), listReviews({ teamId })]);
-        const sData = doc.settings;
-        const t = doc.teams.find((x) => x.id === teamId) ?? null;
-        const js = doc.judges;
-        const ls = doc.links;
-        setSettings(sData);
-        setFinalsSelected((sData.finalsTeamIds || []).includes(teamId));
-        if (t) {
-          setTeam(t);
-          setEdit(t);
-        }
-        setJudges(js);
-        setReviews(rs);
-        setLinks(ls);
-      } catch (e) {
-        alert(errorMessage(e));
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [teamId]);
-
-  /** The editable fields; the team's id and code are kept by spreading the stored team first. */
-  function editable(t: Team) {
-    return {
-      name: t.name,
-      members: t.members || [],
-      github: t.github || undefined,
-      devpost: t.devpost || undefined,
-      description: t.description || undefined,
-      imageUrls: t.imageUrls || []
-    };
-  }
-
-  const prelim = useMemo(
-    () => reviews.filter((r) => r.round === "prelim"),
-    [reviews]
-  );
-  const finals = useMemo(
-    () => reviews.filter((r) => r.round === "finals"),
-    [reviews]
-  );
-
-  const prelimAgg = useMemo(() => aggregate(prelim), [prelim]);
-  const finalsAgg = useMemo(() => aggregate(finals), [finals]);
-
-  const assignedJudges = useMemo(
-    () =>
-      judges.filter((j) => (j.assignedTeamIds || []).includes(teamId || "")),
-    [judges, teamId]
-  );
-  const unassignedJudges = useMemo(
-    () =>
-      judges.filter((j) => !(j.assignedTeamIds || []).includes(teamId || "")),
-    [judges, teamId]
-  );
-
-  async function saveEdits() {
-    if (!edit) return;
-    setSaving(true);
+    setError("");
     try {
-      const saved = await saveTeamFields(edit.id, editable(edit));
-      setTeam(saved);
-      setEdit(saved);
-      alert("Saved.");
+      const [d, r] = await Promise.all([
+        eventOrEmpty(),
+        listReviews({ teamId }),
+      ]);
+      setDoc(d);
+      setReviews(r);
+      const t = d.teams.find((x) => x.id === teamId);
+      if (t) seed(t);
+      else setTeam(null);
     } catch (e) {
-      alert(errorMessage(e));
-    } finally {
-      setSaving(false);
+      setError(errorMessage(e));
     }
   }
-
-  async function toggleFinals() {
-    if (!settings || !team) return;
-    const cur: string[] = settings.finalsTeamIds || [];
-    const next = new Set(cur);
-    if (next.has(team.id)) next.delete(team.id);
-    else next.add(team.id);
-    try {
-      const saved = await patchSettings({ finalsTeamIds: Array.from(next) });
-      setFinalsSelected(next.has(team.id));
-      setSettings(saved.settings);
-    } catch (e) {
-      alert(errorMessage(e));
-    }
-  }
-
-  async function clearSubmission() {
-    if (!team) return;
-    const confirmed = confirm(
-      `Clear submission for "${team.name}"?\n\nThis will:\n• Remove image links\n• Reset GitHub, Devpost, Description\n\nTeam name, members, and team code remain.`
+  useEffect(() => {
+    void load();
+  }, [teamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dirty = !!team && JSON.stringify([name, members, draft]) !== saved;
+  async function save() {
+    if (!team || busy || !doc) return;
+    setError("");
+    setNotice("");
+    const urls = imageLinks(draft.images);
+    const invalid = submissionError(
+      draft.github,
+      draft.devpost,
+      urls,
+      doc.settings.maxImages,
     );
-    if (!confirmed) return;
-
-    try {
-      const saved = await saveTeamFields(team.id, {
-        name: team.name,
-        members: team.members || [],
-        github: undefined,
-        devpost: undefined,
-        description: undefined,
-        imageUrls: []
-      });
-      setTeam(saved);
-      setEdit(saved);
-      alert("Submission cleared.");
-    } catch (e) {
-      alert(errorMessage(e));
+    if (!name.trim() || invalid) {
+      setError(invalid || "Enter a team name.");
+      return;
     }
-  }
-
-  async function setImageUrls(urls: string[]) {
-    if (!team) return;
+    setBusy(true);
     try {
-      const saved = await saveTeamFields(team.id, { ...editable(team), imageUrls: urls });
-      setTeam(saved);
-      setEdit((e) => (e ? { ...e, imageUrls: saved.imageUrls } : e));
-    } catch (e) {
-      alert(errorMessage(e));
-    }
-  }
-
-  async function addImageUrl() {
-    const u = newImageUrl.trim();
-    if (!u) return;
-    await setImageUrls([...(team?.imageUrls || []), u]);
-    setNewImageUrl("");
-  }
-
-  async function removeImageUrl(i: number) {
-    await setImageUrls((team?.imageUrls || []).filter((_, idx) => idx !== i));
-  }
-
-  async function setAssignment(judgeId: string, assigned: boolean) {
-    const j = judges.find((x) => x.id === judgeId);
-    if (!j || !teamId) return;
-    const next = new Set(j.assignedTeamIds || []);
-    if (assigned) next.add(teamId);
-    else next.delete(teamId);
-    try {
-      const doc = await saveJudges((js) => js.map((x) => (x.id === judgeId ? { ...x, assignedTeamIds: Array.from(next) } : x)));
-      setJudges(doc.judges);
-    } catch (e) {
-      alert(errorMessage(e));
-    }
-  }
-
-  /** Organizers edit a team by rewriting it inside the event document; returns the stored team. */
-  async function saveTeamFields(id: string, fields: ReturnType<typeof editable>): Promise<Team> {
-    const doc = await saveTeams((teams) => teams.map((x) => (x.id === id ? { ...x, ...fields } : x)));
-    const saved = doc.teams.find((x) => x.id === id);
-    if (!saved) throw new Error("The team is no longer in the event.");
-    return saved;
-  }
-
-  const assignJudge = (judgeId: string) => setAssignment(judgeId, true);
-  const unassignJudge = (judgeId: string) => setAssignment(judgeId, false);
-
-  async function addExternalLink() {
-    const title = newLink.title.trim();
-    const url = newLink.url.trim();
-    if (!title || !url) return alert("Title and URL required.");
-    try {
-      const doc = await saveLinks((ls) => [...ls, { id: newLinkId(), label: title, url }]);
-      setLinks(doc.links);
-      setNewLink({ title: "", url: "" });
-    } catch (e) {
-      alert(errorMessage(e));
-    }
-  }
-
-  async function removeExternalLink(id: string) {
-    try {
-      const doc = await saveLinks((ls) => ls.filter((x) => x.id !== id));
-      setLinks(doc.links);
-    } catch (e) {
-      alert(errorMessage(e));
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-gray-500 dark:text-gray-400">
-        Loading…
-      </div>
-    );
-  }
-
-  if (!team || !edit) {
-    return (
-      <div className="p-6">
-        <div className="mb-4">
-          <button
-            onClick={() => router.back()}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            Back
-          </button>
-        </div>
-        <div className="rounded-2xl border border-gray-200 p-4 text-sm text-rose-600 dark:border-white/10">
-          Team not found.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-6xl">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-            Team: {team.name}
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            ID: <span className="font-mono">{team.id}</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/admin"
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            Admin Home
-          </Link>
-          <button
-            onClick={() => router.back()}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            Back
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label="Prelim Avg (weighted)" value={fmt(prelimAgg.avgW)} />
-        <Stat label="Prelim Reviews" value={String(prelimAgg.count)} />
-        <Stat label="Finals Avg (weighted)" value={fmt(finalsAgg.avgW)} />
-        <Stat label="Finals Reviews" value={String(finalsAgg.count)} />
-      </div>
-
-      {/* Quick actions */}
-      <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-        <button
-          onClick={() => copy(team.code || "")}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          Copy Team Code
-        </button>
-        {team.github ? (
-          <a
-            href={team.github}
-            target="_blank"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            Open GitHub
-          </a>
-        ) : null}
-        {team.devpost ? (
-          <a
-            href={team.devpost}
-            target="_blank"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            Open Devpost
-          </a>
-        ) : null}
-        <Link
-          href={`/judge/${team.id}`}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          Open Judge View (Prelim)
-        </Link>
-        <Link
-          href={`/judge/finals/${team.id}`}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          Open Judge View (Finals)
-        </Link>
-        <button
-          onClick={toggleFinals}
-          className={[
-            "rounded-lg px-3 py-2 text-xs font-semibold",
-            finalsSelected
-              ? "bg-rose-600 text-white"
-              : "bg-indigo-600 text-white"
-          ].join(" ")}
-        >
-          {finalsSelected ? "Remove from Finals" : "Add to Finals"}
-        </button>
-      </div>
-
-      {/* Submission editor */}
-      <section className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-lg font-semibold">Submission</div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={clearSubmission}
-              className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-            >
-              Clear submission
-            </button>
-            <button
-              onClick={saveEdits}
-              disabled={saving}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-3">
-            <Labeled label="Team Name">
-              <input
-                className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-                value={edit.name}
-                onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-              />
-            </Labeled>
-
-            <Labeled label="Members">
-              <TagEditor
-                values={edit.members || []}
-                onChange={(v) => setEdit({ ...edit, members: v })}
-                placeholder="Add member"
-              />
-            </Labeled>
-
-            <Labeled label="Team Code">
-              <div
-                className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10"
-                title="Login code (server-generated)"
-              >
-                {team.code || "—"}
-              </div>
-            </Labeled>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Labeled label="GitHub URL">
-                <input
-                  className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs font-mono dark:border-white/10 dark:bg-transparent"
-                  value={edit.github || ""}
-                  onChange={(e) => setEdit({ ...edit, github: e.target.value })}
-                />
-              </Labeled>
-              <Labeled label="Devpost URL">
-                <input
-                  className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs font-mono dark:border-white/10 dark:bg-transparent"
-                  value={edit.devpost || ""}
-                  onChange={(e) =>
-                    setEdit({ ...edit, devpost: e.target.value })
-                  }
-                />
-              </Labeled>
-            </div>
-          </div>
-
-          <div>
-            <Labeled label="Description">
-              <textarea
-                rows={8}
-                className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-                value={edit.description || ""}
-                onChange={(e) =>
-                  setEdit({ ...edit, description: e.target.value })
+      const d = await saveEvent((d) => {
+        if (!d.teams.some((t) => t.id === teamId))
+          throw new Error("This team was removed. Return to the teams list.");
+        return {
+          ...d,
+          teams: d.teams.map((t) =>
+            t.id === teamId
+              ? {
+                  ...t,
+                  name: name.trim(),
+                  members: members
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                  github: draft.github.trim(),
+                  devpost: draft.devpost.trim(),
+                  description: draft.description.trim(),
+                  imageUrls: urls,
                 }
+              : t,
+          ),
+        };
+      });
+      setDoc(d);
+      seed(d.teams.find((t) => t.id === teamId)!);
+      setNotice("Team changes saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="max-w-3xl space-y-5">
+      <Link href="/admin/teams" className="underline text-sm">
+        ← All teams
+      </Link>
+      <Status
+        loading={!doc && !error}
+        error={error}
+        notice={!dirty ? notice : ""}
+        onRetry={!doc ? load : undefined}
+      />
+      {doc && !team && <p>Team not found.</p>}
+      {team && doc && (
+        <>
+          <h1 className="text-3xl font-semibold">{team.name}</h1>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span>
+              Team code: <code>{team.code}</code>
+            </span>
+            <CopyButton value={team.code ?? ""} />
+          </div>
+          <form
+            data-unsaved={dirty}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <fieldset disabled={busy} className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="submit" className="ux-primary" disabled={!dirty}>
+                  {busy ? "Saving…" : "Save changes"}
+                </button>
+                {dirty && (
+                  <>
+                    <span className="text-sm text-amber-300">
+                      Unsaved changes
+                    </span>
+                    <button
+                      type="button"
+                      className="ux-secondary"
+                      onClick={() => {
+                        if (confirm("Discard unsaved changes?")) seed(team);
+                      }}
+                    >
+                      Discard
+                    </button>
+                  </>
+                )}
+              </div>
+              <label className="ux-label">
+                Team name
+                <input
+                  className="ux-input"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <label className="ux-label">
+                Members (comma-separated)
+                <input
+                  className="ux-input"
+                  value={members}
+                  onChange={(e) => setMembers(e.target.value)}
+                />
+              </label>
+              <SubmissionFields
+                value={draft}
+                onChange={setDraft}
+                maxImages={doc.settings.maxImages}
               />
-            </Labeled>
-          </div>
-        </div>
-      </section>
-
-      {/* Images */}
-      <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-        <div className="mb-3 text-lg font-semibold">Images</div>
-        {team.imageUrls?.length ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-            {team.imageUrls.map((u, i) => (
-              <div
-                key={i}
-                className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10"
-              >
-                <a href={u} target="_blank" title="Open image">
-                  <img
-                    src={u}
-                    alt=""
-                    className="aspect-video w-full object-cover"
-                  />
-                </a>
-                <button
-                  onClick={() => removeImageUrl(i)}
-                  className="absolute right-1 top-1 rounded bg-black/60 px-2 py-0.5 text-[10px] text-white"
-                  title="Remove image link"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            No images yet.
-          </div>
-        )}
-        <div className="mt-3 flex gap-2">
-          <input
-            className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
-            placeholder="https://… (image URL)"
-            value={newImageUrl}
-            onChange={(e) => setNewImageUrl(e.target.value)}
-          />
-          <button
-            onClick={addImageUrl}
-            className="rounded-md border border-gray-200 px-3 py-1 text-xs dark:border-white/10"
-          >
-            Add image URL
-          </button>
-        </div>
-      </section>
-
-      {/* Event links (shared across the portal; there are no per-team links in the API) */}
-      <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-        <div className="mb-3 text-lg font-semibold">Event Links</div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-          {links.map((l) => (
-            <div
-              key={l.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-xs dark:border-white/10"
-            >
-              <a href={l.url} target="_blank" className="truncate underline">
-                {l.label}
-              </a>
               <button
-                onClick={() => removeExternalLink(l.id)}
-                className="ml-3 rounded border border-gray-200 px-2 py-0.5 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
+                type="button"
+                className="text-sm text-rose-300"
+                onClick={() => {
+                  if (
+                    confirm(
+                      "Clear project links, description, and images in this draft? Save changes to apply.",
+                    )
+                  )
+                    setDraft(submissionDraft({}));
+                }}
               >
-                Remove
+                Clear submission draft
               </button>
-            </div>
-          ))}
-          {links.length === 0 && (
-            <div className="text-sm text-gray-500 dark:text-gray-400 sm:col-span-2 md:col-span-3">
-              No links yet.
-            </div>
-          )}
-        </div>
-
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <input
-            className="rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-            placeholder="Title (e.g., Devpost)"
-            value={newLink.title}
-            onChange={(e) => setNewLink({ ...newLink, title: e.target.value })}
-          />
-          <input
-            className="rounded-md border border-gray-200 px-2 py-1 text-sm font-mono dark:border-white/10 dark:bg-transparent"
-            placeholder="https://…"
-            value={newLink.url}
-            onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
-          />
-          <button
-            onClick={addExternalLink}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
-          >
-            Add link
-          </button>
-        </div>
-      </section>
-
-      {/* Judges assignment */}
-      <section className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-          <div className="mb-2 text-lg font-semibold">Assigned Judges</div>
-          <div className="space-y-2">
-            {assignedJudges.map((j) => (
-              <div
-                key={j.id}
-                className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-white/10"
+            </fieldset>
+          </form>
+          <div className="flex flex-wrap gap-4 border-t border-white/10 pt-4 text-sm">
+            <Link href="/admin/schedule" className="underline">
+              Schedule & judges
+            </Link>
+            <Link href="/admin/assign" className="underline">
+              Assignment exceptions
+            </Link>
+            <Link href="/admin/finals" className="underline">
+              Finals selection
+              {doc.settings.finalsTeamIds.includes(team.id)
+                ? " · Selected"
+                : ""}
+            </Link>
+          </div>
+          <section className="space-y-3">
+            <h2 className="text-xl font-semibold">
+              Reviews · {reviews.length}
+            </h2>
+            {reviews.map((r) => (
+              <details
+                key={r.id}
+                className="rounded-xl border border-white/10 p-4"
               >
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {j.name || j.id}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    ID: <span className="font-mono">{j.id}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => unassignJudge(j.id)}
-                  className="rounded-md border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-                >
-                  Unassign
-                </button>
-              </div>
+                <summary>
+                  {r.judgeName ||
+                    doc.judges.find((j) => j.id === r.judgeId)?.name ||
+                    "Judge"}{" "}
+                  · {r.round === "finals" ? "Finals" : "Prelim"} ·{" "}
+                  {r.weightedTotal.toFixed(2)}
+                </summary>
+                <dl className="my-3 text-sm">
+                  {doc.rubric?.criteria.map((c) => (
+                    <div key={c.id} className="flex justify-between gap-3">
+                      <dt>{c.label}</dt>
+                      <dd>
+                        {r.scores[c.id] ?? "—"} /{" "}
+                        {c.maxScore ?? doc.rubric?.scaleMax}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="whitespace-pre-line text-sm">
+                  {r.feedback || "No written feedback."}
+                </p>
+              </details>
             ))}
-            {assignedJudges.length === 0 && (
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                No judges assigned.
-              </div>
+            {!reviews.length && (
+              <p className="text-sm text-slate-400">No reviews yet.</p>
             )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-          <div className="mb-2 text-lg font-semibold">Add Judges</div>
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {unassignedJudges.map((j) => (
-              <div
-                key={j.id}
-                className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-white/10"
-              >
-                <div className="truncate">
-                  <div className="font-medium text-gray-900 dark:text-white truncate">
-                    {j.name || j.id}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    ID: <span className="font-mono">{j.id}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => assignJudge(j.id)}
-                  className="rounded-md border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
-                >
-                  Assign
-                </button>
-              </div>
-            ))}
-            {unassignedJudges.length === 0 && (
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                All judges already assigned.
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Reviews */}
-      <section className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-lg font-semibold">Prelim Reviews</div>
-            <AggPill
-              label="Avg (weighted)"
-              value={prelimAgg.avgW}
-              count={prelimAgg.count}
-            />
-          </div>
-          <ReviewsTable reviews={prelim} />
-        </div>
-
-        <div className="rounded-2xl border border-gray-200 p-4 dark:border-white/10">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-lg font-semibold">Finals Reviews</div>
-            <AggPill
-              label="Avg (weighted)"
-              value={finalsAgg.avgW}
-              count={finalsAgg.count}
-            />
-          </div>
-          <ReviewsTable reviews={finals} />
-        </div>
-      </section>
+          </section>
+        </>
+      )}
     </div>
   );
-}
-
-/* ---------- helpers & tiny components ---------- */
-
-function Labeled({
-  label,
-  children
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-1 text-sm font-medium text-gray-900 dark:text-white">
-        {label}
-      </div>
-      {children}
-    </label>
-  );
-}
-
-function TagEditor({
-  values,
-  onChange,
-  placeholder
-}: {
-  values: string[];
-  onChange: (values: string[]) => void;
-  placeholder?: string;
-}) {
-  const [input, setInput] = useState("");
-  function add() {
-    const v = input.trim();
-    if (!v) return;
-    onChange([...(values || []), v]);
-    setInput("");
-  }
-  function remove(i: number) {
-    const next = [...values];
-    next.splice(i, 1);
-    onChange(next);
-  }
-  return (
-    <div>
-      <div className="flex flex-wrap gap-2">
-        {(values || []).map((v, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-white/10"
-          >
-            {v}
-            <button
-              className="text-gray-500 hover:text-rose-600"
-              onClick={() => remove(i)}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-      <div className="mt-2 flex gap-2">
-        <input
-          className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm dark:border-white/10 dark:bg-transparent"
-          placeholder={placeholder || "Add"}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => (e.key === "Enter" ? add() : undefined)}
-        />
-        <button
-          onClick={add}
-          className="rounded-md border border-gray-200 px-2 text-xs dark:border-white/10"
-        >
-          Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ReviewsTable({ reviews }: { reviews: Review[] }) {
-  const sorted = useMemo(
-    () =>
-      [...reviews].sort((a, b) => b.completedAt.localeCompare(a.completedAt)),
-    [reviews]
-  );
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full text-xs">
-        <thead className="bg-gray-50 dark:bg-white/5">
-          <tr>
-            <th className="px-2 py-1 text-left">Judge</th>
-            <th className="px-2 py-1 text-left">Round</th>
-            <th className="px-2 py-1 text-left">Weighted</th>
-            <th className="px-2 py-1 text-left">Raw</th>
-            <th className="px-2 py-1 text-left">Submitted</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((r) => (
-            <tr
-              key={r.id}
-              className="border-t border-gray-100 dark:border-white/10"
-            >
-              <td className="px-2 py-1">{r.judgeName || r.judgeId}</td>
-              <td className="px-2 py-1">{r.round}</td>
-              <td className="px-2 py-1">
-                {Number(r.weightedTotal || 0).toFixed(2)}
-              </td>
-              <td className="px-2 py-1">{Number(r.total || 0).toFixed(2)}</td>
-              <td className="px-2 py-1">
-                {r.completedAt ? new Date(r.completedAt).toLocaleString() : "—"}
-              </td>
-            </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr>
-              <td
-                className="px-2 py-2 text-gray-500 dark:text-gray-400"
-                colSpan={5}
-              >
-                No reviews yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AggPill({
-  label,
-  value,
-  count
-}: {
-  label: string;
-  value: number;
-  count: number;
-}) {
-  const v = isFinite(value) ? value.toFixed(2) : "—";
-  return (
-    <span className="rounded-md bg-gray-100 px-2 py-1 text-[11px] text-gray-700 dark:bg-white/5 dark:text-gray-300">
-      {label}: <span className="font-medium">{v}</span> ({count})
-    </span>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-white/10">
-      <div className="text-gray-500 dark:text-gray-400">{label}</div>
-      <div className="mt-1 font-semibold text-gray-900 dark:text-white">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function aggregate(list: Review[]) {
-  const n = list.length || 0;
-  if (!n) return { avgW: 0, avg: 0, count: 0 };
-  const sumW = list.reduce((a, r) => a + Number(r.weightedTotal || 0), 0);
-  const sum = list.reduce((a, r) => a + Number(r.total || 0), 0);
-  return { avgW: sumW / n, avg: sum / n, count: n };
-}
-
-function copy(s: string) {
-  if (!s) return alert("No team code.");
-  navigator.clipboard.writeText(s).then(
-    () => alert("Copied team code"),
-    () => alert("Copy failed")
-  );
-}
-
-function fmt(n: number) {
-  return isFinite(n) ? n.toFixed(2) : "—";
 }

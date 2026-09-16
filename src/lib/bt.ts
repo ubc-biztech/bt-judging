@@ -23,7 +23,7 @@ import {
   type JudgingEvent,
   type JudgingSettings,
   type Review,
-  type Rubric
+  type Rubric,
 } from "@ubc-biztech/sdk";
 import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import { configureAmplify } from "./amplify";
@@ -32,7 +32,9 @@ import { clearSession, getSession, setSession, type Session } from "./session";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_BT_API_URL?.trim() ||
-  (process.env.NEXT_PUBLIC_STAGE === "production" ? "https://api.ubcbiztech.com" : "https://api-dev.ubcbiztech.com");
+  (process.env.NEXT_PUBLIC_STAGE === "production"
+    ? "https://api.ubcbiztech.com"
+    : "https://api-dev.ubcbiztech.com");
 
 /** The organizer's Cognito ID token, or null when there is no Cognito session. */
 export async function cognitoIdToken(): Promise<string | null> {
@@ -51,14 +53,18 @@ export const bt = createClient({
     const s = getSession();
     return s && s.role !== "admin" ? s.code : null;
   },
-  getToken: () => (getSession()?.role === "admin" ? cognitoIdToken() : null)
+  getToken: () => (getSession()?.role === "admin" ? cognitoIdToken() : null),
 });
 
 /** This deployment's event: `bt.judging("hellohacks", 2026)`. */
 export const judging = () => bt.judging(EVENT.id, EVENT.year);
 
 /** The same scope with an explicit code, for login (no session yet). */
-export const judgingAs = (code: string) => createClient({ baseUrl: API_URL, getCode: () => code }).judging(EVENT.id, EVENT.year);
+export const judgingAs = (code: string) =>
+  createClient({ baseUrl: API_URL, getCode: () => code }).judging(
+    EVENT.id,
+    EVENT.year,
+  );
 
 // ─── Session ─────────────────────────────────────────────────────────
 
@@ -67,7 +73,12 @@ export async function loginWithCode(code: string): Promise<Session> {
   const trimmed = code.trim();
   const { me } = await judgingAs(trimmed).get();
   if (!me) throw new Error("The server did not say who this code belongs to.");
-  const session: Session = { role: me.role, code: trimmed, id: me.id, name: me.name };
+  const session: Session = {
+    role: me.role,
+    code: trimmed,
+    id: me.id,
+    name: me.name,
+  };
   setSession(session);
   return session;
 }
@@ -81,14 +92,20 @@ export async function loginAsAdmin(): Promise<Session> {
   const tokens = (await fetchAuthSession()).tokens;
   const email = String(tokens?.idToken?.payload.email ?? "");
   if (!tokens?.idToken || !email) throw new Error("Not signed in.");
-  const session: Session = { role: "admin", id: email, name: String(tokens.idToken.payload.name ?? email) };
+  const session: Session = {
+    role: "admin",
+    id: email,
+    name: String(tokens.idToken.payload.name ?? email),
+  };
   setSession(session);
   try {
     await judging().admin.get();
   } catch (e) {
     if (isNotFound(e)) return session;
     await logout();
-    throw e instanceof ForbiddenError ? new Error("This account is not a BizTech admin.") : e;
+    throw e instanceof ForbiddenError
+      ? new Error("This account is not a BizTech admin.")
+      : e;
   }
   return session;
 }
@@ -109,13 +126,22 @@ export async function logout() {
 
 /** A sentence a person can read, for any SDK error. */
 export function errorMessage(e: unknown): string {
-  if (e instanceof ContractViolationError) return "The server answered in an unexpected shape. Tell the organizers.";
-  if (e instanceof NotAuthenticatedError) return "You are signed out. Sign in again.";
-  if (e instanceof ApiError) return e.status >= 500 ? "The server had a problem. Try again." : ((e.details as { message?: string })?.message ?? e.message);
-  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
+  if (e instanceof ContractViolationError)
+    return "The server answered in an unexpected shape. Tell the organizers.";
+  if (e instanceof NotAuthenticatedError)
+    return "You are signed out. Sign in again.";
+  if (e instanceof ApiError)
+    return e.status >= 500
+      ? "The server had a problem. Try again."
+      : ((e.details as { message?: string })?.message ?? e.message);
+  if (e && typeof e === "object" && "message" in e)
+    return String((e as { message: unknown }).message);
   return String(e);
 }
-export const isNotFound = (e: unknown) => e instanceof EventNotFoundError || e instanceof TeamNotFoundError || (e instanceof ApiError && e.status === 404);
+export const isNotFound = (e: unknown) =>
+  e instanceof EventNotFoundError ||
+  e instanceof TeamNotFoundError ||
+  (e instanceof ApiError && e.status === 404);
 
 /** `await orNull(judging().info())` — null instead of a 404 error, for "does it exist" reads. */
 export async function orNull<T>(p: Promise<T>): Promise<T | null> {
@@ -129,7 +155,12 @@ export async function orNull<T>(p: Promise<T>): Promise<T | null> {
 
 // ─── Defaults ────────────────────────────────────────────────────────
 
-export const PHASES: JudgingSettings["phase"][] = ["submission", "prelim", "finals", "closed"];
+export const PHASES: JudgingSettings["phase"][] = [
+  "submission",
+  "prelim",
+  "finals",
+  "closed",
+];
 
 export const DEFAULT_SETTINGS: JudgingSettings = {
   eventName: DEFAULT_EVENT_NAME,
@@ -142,11 +173,18 @@ export const DEFAULT_SETTINGS: JudgingSettings = {
   allowJudgeSeeOthers: true,
   anonymizeTeams: false,
   lockSubmissions: false,
-  maxImages: 10
+  maxImages: 10,
 };
 
 /** What an event looks like before an organizer has saved anything. */
-export const EMPTY_EVENT: JudgingEvent = { updatedAt: "", settings: DEFAULT_SETTINGS, rubric: null, links: [], judges: [], teams: [] };
+export const EMPTY_EVENT: JudgingEvent = {
+  updatedAt: "",
+  settings: DEFAULT_SETTINGS,
+  rubric: null,
+  links: [],
+  judges: [],
+  teams: [],
+};
 
 // ─── Reads ───────────────────────────────────────────────────────────
 
@@ -178,8 +216,12 @@ export async function settingsOrDefaults(): Promise<JudgingSettings> {
 }
 
 /** Reviews, as the signed-in role may see them. Organizers see everything. */
-export async function listReviews(filters: JudgingAdminReviewsInput = {}): Promise<Review[]> {
-  return getSession()?.role === "admin" ? judging().admin.reviews(filters) : judging().reviews.list(filters);
+export async function listReviews(
+  filters: JudgingAdminReviewsInput = {},
+): Promise<Review[]> {
+  return getSession()?.role === "admin"
+    ? judging().admin.reviews(filters)
+    : judging().reviews.list(filters);
 }
 
 // ─── Organizer writes ────────────────────────────────────────────────
@@ -192,27 +234,56 @@ export type EditableEvent = JudgingAdminSetInput;
  * codes because they are passed back; a new one (no id) gets both minted. Last write wins, so
  * keep the read-to-write window short: compute nothing slow inside `patch`.
  */
-export async function saveEvent(patch: (doc: EditableEvent) => EditableEvent): Promise<JudgingEvent> {
+export async function saveEvent(
+  patch: (doc: EditableEvent) => EditableEvent,
+): Promise<JudgingEvent> {
   const current = (await orNull(judging().admin.get())) ?? EMPTY_EVENT;
   const { me: _me, updatedAt: _updatedAt, ...editable } = current;
   void _me;
   void _updatedAt;
-  return judging().admin.set(patch(editable));
+  const saved = await judging().admin.set(patch(editable));
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event("judging:update"));
+  return saved;
 }
 
 /** `settings` is part of the whole-document write; this changes some fields and keeps the rest. */
-export const patchSettings = (patch: Partial<JudgingSettings>) => saveEvent((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
+export const patchSettings = (patch: Partial<JudgingSettings>) =>
+  saveEvent((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
 
-export const setRubric = (rubric: Rubric | null) => saveEvent((d) => ({ ...d, rubric }));
+export const setRubric = (rubric: Rubric | null) =>
+  saveEvent((d) => ({ ...d, rubric }));
 
-export const setLinks = (links: EditableEvent["links"] | ((links: EditableEvent["links"]) => EditableEvent["links"])) =>
-  saveEvent((d) => ({ ...d, links: typeof links === "function" ? links(d.links) : links }));
+export const setLinks = (
+  links:
+    | EditableEvent["links"]
+    | ((links: EditableEvent["links"]) => EditableEvent["links"]),
+) =>
+  saveEvent((d) => ({
+    ...d,
+    links: typeof links === "function" ? links(d.links) : links,
+  }));
 
-export const setJudges = (judges: EditableEvent["judges"] | ((judges: EditableEvent["judges"]) => EditableEvent["judges"])) =>
-  saveEvent((d) => ({ ...d, judges: typeof judges === "function" ? judges(d.judges) : judges }));
+export const setJudges = (
+  judges:
+    | EditableEvent["judges"]
+    | ((judges: EditableEvent["judges"]) => EditableEvent["judges"]),
+) =>
+  saveEvent((d) => ({
+    ...d,
+    judges: typeof judges === "function" ? judges(d.judges) : judges,
+  }));
 
-export const setTeams = (teams: EditableEvent["teams"] | ((teams: EditableEvent["teams"]) => EditableEvent["teams"])) =>
-  saveEvent((d) => ({ ...d, teams: typeof teams === "function" ? teams(d.teams) : teams }));
+export const setTeams = (
+  teams:
+    | EditableEvent["teams"]
+    | ((teams: EditableEvent["teams"]) => EditableEvent["teams"]),
+) =>
+  saveEvent((d) => ({
+    ...d,
+    teams: typeof teams === "function" ? teams(d.teams) : teams,
+  }));
 
 /** A stable id for links, which the portal chooses (judges and teams get theirs from the backend). */
-export const newLinkId = () => `link_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+export const newLinkId = () =>
+  `link_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;

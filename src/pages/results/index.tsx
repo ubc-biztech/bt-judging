@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { Status } from "@/components/Feedback";
+import { PHASE_LABELS } from "@/lib/ux";
 import Layout from "@/components/Layout";
 import { EVENT_ID } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
@@ -10,7 +12,7 @@ import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
-import { eventOrEmpty, listReviews } from "@/lib/bt";
+import { errorMessage, eventOrEmpty, listReviews } from "@/lib/bt";
 
 type Row = {
   teamId: string;
@@ -24,7 +26,7 @@ export default function Results() {
   const [rows, setRows] = useState<Row[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tab, setTab] = useState<"prelim" | "finals">("prelim");
-  const [hideUnderCovered, setHideUnderCovered] = useState(true);
+  const [hideUnderCovered, setHideUnderCovered] = useState(false);
 
   const isAdmin = ready && session?.role === "admin";
   const isJudge = ready && session?.role === "judge";
@@ -45,24 +47,44 @@ export default function Results() {
 
   const active = ready && !!session && session.role !== "team";
   // One document (settings, rubric, teams) plus the reviews this role may see.
-  const { data: doc } = usePoll(active ? eventOrEmpty : null, [active, session?.role], 10000);
+  const {
+    data: doc,
+    error: docError,
+    refresh: refreshDoc,
+  } = usePoll(active ? eventOrEmpty : null, [active, session?.role], 10000);
   const settings = doc?.settings ?? null;
   const rubricRaw = doc?.rubric ?? null;
   const teamList = doc?.teams ?? null;
-  const { data: reviewList } = usePoll(active ? () => listReviews() : null, [active, session?.role]);
+  const {
+    data: reviewList,
+    error: reviewError,
+    refresh: refreshReviews,
+  } = usePoll(active ? () => listReviews() : null, [active, session?.role]);
 
   const allowJudgeSeeOthers = !!settings?.allowJudgeSeeOthers;
-  const rubric: Rubric | null = useMemo(() => (rubricRaw === null ? null : normalizeRubric(rubricRaw)), [rubricRaw]);
+  const rubric: Rubric | null = useMemo(
+    () => (rubricRaw === null ? null : normalizeRubric(rubricRaw)),
+    [rubricRaw],
+  );
   const teams = useMemo(() => {
     const map: Record<string, Team> = {};
-    for (const t of teamList ?? []) map[t.id] = t;
+    for (const t of teamList ?? [])
+      map[t.id] =
+        isJudge && settings?.anonymizeTeams
+          ? {
+              ...t,
+              name: `Team ${t.id.slice(0, 4).toUpperCase()}`,
+              members: [],
+            }
+          : t;
     return map;
-  }, [teamList]);
+  }, [teamList, isJudge, settings?.anonymizeTeams]);
   const reviewsByTeam = useMemo(() => {
     const byTeam: Record<string, Review[]> = {};
-    for (const r of reviewList ?? []) (byTeam[r.teamId] ||= []).push(r);
+    for (const r of reviewList ?? [])
+      if (teams[r.teamId]) (byTeam[r.teamId] ||= []).push(r);
     return byTeam;
-  }, [reviewList]);
+  }, [reviewList, teams]);
 
   // Aggregate for current tab only
   useEffect(() => {
@@ -75,7 +97,7 @@ export default function Results() {
             teamId,
             total: 0,
             weightedTotal: 0,
-            count: 0
+            count: 0,
           };
           cur.total += r.total || 0;
           cur.weightedTotal += r.weightedTotal || 0;
@@ -85,7 +107,10 @@ export default function Results() {
     });
 
     // coverage-aware sort: avg (weighted) desc, then review count desc
-    const req = Number(settings?.perTeamJudges ?? 3);
+    const req =
+      tab === "finals"
+        ? (settings?.finalsJudgeIds.length ?? 0)
+        : Number(settings?.perTeamJudges ?? 3);
     const pointTotals = rubricUsesPointTotals(rubric);
     const sorted = Object.values(agg)
       .map((r) => ({ ...r, meetsCoverage: r.count >= req }))
@@ -98,16 +123,25 @@ export default function Results() {
         return (b.count || 0) - (a.count || 0);
       });
     setRows(sorted);
-  }, [reviewsByTeam, rubric, tab, settings?.perTeamJudges]);
+  }, [
+    reviewsByTeam,
+    rubric,
+    tab,
+    settings?.perTeamJudges,
+    settings?.finalsJudgeIds.length,
+  ]);
 
-  const reqCount = Number(settings?.perTeamJudges ?? 3);
+  const reqCount =
+    tab === "finals"
+      ? (settings?.finalsJudgeIds.length ?? 0)
+      : Number(settings?.perTeamJudges ?? 3);
 
   const canShowDetails = isAdmin || allowJudgeSeeOthers;
   const pointTotals = rubricUsesPointTotals(rubric);
   const primaryMetricLabel = pointTotals ? "Avg Score" : "Avg (Weighted)";
 
   const visibleRows = rows.filter(
-    (r) => !hideUnderCovered || r.count >= reqCount
+    (r) => !hideUnderCovered || r.count >= reqCount,
   );
 
   /* ----------------- EXPORTS ----------------- */
@@ -124,7 +158,7 @@ export default function Results() {
       pointTotals ? "AvgScore" : "AvgWeighted",
       "AvgRaw",
       "ReviewCount",
-      "TeamId"
+      "TeamId",
     ];
     const lines = [header.join(",")];
     visibleRows.forEach((r, i) => {
@@ -139,14 +173,14 @@ export default function Results() {
           avgW.toFixed(4),
           avg.toFixed(4),
           String(r.count),
-          r.teamId
-        ].join(",")
+          r.teamId,
+        ].join(","),
       );
     });
     downloadBlob(
       [lines.join("\n")],
       `${EVENT_ID}-results-${tab}-${dateSlug()}.csv`,
-      "text/csv;charset=utf-8"
+      "text/csv;charset=utf-8",
     );
   }
 
@@ -162,7 +196,7 @@ export default function Results() {
       "TotalRaw",
       "TotalWeighted",
       "Feedback",
-      "SubmittedAt"
+      "SubmittedAt",
     ];
     const lines = [columns.map(csvCell).join(",")];
 
@@ -172,7 +206,9 @@ export default function Results() {
         .filter((r) => (r.round || "prelim") === tab)
         .forEach((r) => {
           const perCrit = crits.map((c) =>
-            r.scores && typeof r.scores[c.id] === "number" ? r.scores[c.id] : ""
+            r.scores && typeof r.scores[c.id] === "number"
+              ? r.scores[c.id]
+              : "",
           );
           lines.push(
             [
@@ -185,8 +221,8 @@ export default function Results() {
               csvCell(nf(r.total)),
               csvCell(nf(r.weightedTotal)),
               csvCell(r.feedback || ""),
-              csvCell(r.completedAt || "")
-            ].join(",")
+              csvCell(r.completedAt || ""),
+            ].join(","),
           );
         });
     });
@@ -194,14 +230,14 @@ export default function Results() {
     downloadBlob(
       [lines.join("\n")],
       `${EVENT_ID}-results-detailed-${tab}-${dateSlug()}.csv`,
-      "text/csv;charset=utf-8"
+      "text/csv;charset=utf-8",
     );
   }
 
   function downloadBlob(
     parts: (string | Blob)[],
     filename: string,
-    type: string
+    type: string,
   ) {
     const blob = new Blob(parts, { type });
     const url = URL.createObjectURL(blob);
@@ -235,7 +271,7 @@ export default function Results() {
             </h1>
             {settings?.phase && (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Event phase: {settings.phase}
+                Event phase: {PHASE_LABELS[settings.phase]}
               </p>
             )}
           </div>
@@ -247,6 +283,7 @@ export default function Results() {
               {(["prelim", "finals"] as const).map((t) => (
                 <button
                   key={t}
+                  aria-pressed={tab === t}
                   onClick={() => {
                     setExpanded(null);
                     setTab(t);
@@ -255,7 +292,7 @@ export default function Results() {
                     "rounded-md px-3 py-1.5 text-xs",
                     tab === t
                       ? "bg-indigo-600 text-white"
-                      : "text-gray-700 dark:text-gray-300"
+                      : "text-gray-700 dark:text-gray-300",
                   ].join(" ")}
                 >
                   {t === "prelim" ? "Prelim" : "Finals"}
@@ -271,18 +308,20 @@ export default function Results() {
                   checked={hideUnderCovered}
                   onChange={(e) => setHideUnderCovered(e.target.checked)}
                 />
-                Hide under-covered teams ({reqCount})
+                Only teams with {reqCount}+ reviews
               </label>
             )}
 
             {/* Exports */}
             <button
+              disabled={!visibleRows.length}
               onClick={exportLeaderboardCsv}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
             >
               Export CSV
             </button>
             <button
+              disabled={!canShowDetails || !visibleRows.length}
               onClick={exportDetailedCsv}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"
               title="Per judge, per criterion with feedback"
@@ -292,6 +331,22 @@ export default function Results() {
           </div>
         </div>
 
+        <Status
+          loading={(!doc || !reviewList) && !docError && !reviewError}
+          error={
+            docError || reviewError ? errorMessage(docError || reviewError) : ""
+          }
+          onRetry={() => {
+            void refreshDoc();
+            void refreshReviews();
+          }}
+        />
+        {isJudge && !allowJudgeSeeOthers && (
+          <p className="mt-3 text-sm text-slate-400">
+            Only your reviews are included. Organizers have not shared other
+            judges’ scores.
+          </p>
+        )}
         {/* Leaderboard */}
         <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
           <table className="min-w-full text-sm">
@@ -300,7 +355,9 @@ export default function Results() {
                 <th className="px-4 py-2 text-left">Rank</th>
                 <th className="px-4 py-2 text-left">Team</th>
                 <th className="px-4 py-2 text-left">{primaryMetricLabel}</th>
-                <th className="px-4 py-2 text-left">Avg (Raw)</th>
+                {!pointTotals && (
+                  <th className="px-4 py-2 text-left">Avg (Raw)</th>
+                )}
                 <th className="px-4 py-2 text-left"># Reviews</th>
                 <th className="px-4 py-2 text-left"></th>
               </tr>
@@ -320,7 +377,7 @@ export default function Results() {
                     key={r.teamId}
                     className={[
                       "border-t border-gray-100 align-top dark:border-white/10",
-                      coverageOk ? "" : "opacity-75"
+                      coverageOk ? "" : "opacity-75",
                     ].join(" ")}
                   >
                     <td className="px-4 py-2">{i + 1}</td>
@@ -332,7 +389,7 @@ export default function Results() {
                             "rounded-md px-1.5 py-0.5 text-[11px] border",
                             coverageOk
                               ? "border-green-300 text-green-700 dark:text-green-400"
-                              : "border-amber-300 text-amber-700 dark:text-amber-400"
+                              : "border-amber-300 text-amber-700 dark:text-amber-400",
                           ].join(" ")}
                           title={`Coverage: ${r.count}/${reqCount}`}
                         >
@@ -341,7 +398,9 @@ export default function Results() {
                       </div>
                     </td>
                     <td className="px-4 py-2">{avgW.toFixed(2)}</td>
-                    <td className="px-4 py-2">{avg.toFixed(2)}</td>
+                    {!pointTotals && (
+                      <td className="px-4 py-2">{avg.toFixed(2)}</td>
+                    )}
                     <td className="px-4 py-2">{r.count}</td>
                     <td className="px-4 py-2">
                       {canShowDetails && r.count > 0 && (
@@ -365,7 +424,13 @@ export default function Results() {
                     className="px-4 py-4 text-gray-500 dark:text-gray-400"
                     colSpan={6}
                   >
-                    No reviews yet.
+                    {docError || reviewError
+                      ? "Results could not be refreshed."
+                      : !doc || !reviewList
+                        ? "Loading results…"
+                        : rows.length
+                          ? "No teams match the review-count filter. Uncheck it to see results."
+                          : "No reviews yet for this round."}
                   </td>
                 </tr>
               )}
@@ -376,34 +441,15 @@ export default function Results() {
         {/* Expanded per-team details with per-criterion columns */}
         {expanded && canShowDetails && (
           <Details
+            key={expanded}
             team={teams[expanded]}
             reviews={(reviewsByTeam[expanded] || []).filter(
-              (r) => (r.round || "prelim") === tab
+              (r) => (r.round || "prelim") === tab,
             )}
             rubric={rubric}
             pointTotals={pointTotals}
           />
         )}
-
-        {/* All Teams list (compact) */}
-        <h2 className="mt-10 text-lg font-semibold text-gray-900 dark:text-white">
-          All Teams
-        </h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {Object.values(teams).map((t) => (
-            <div
-              key={t.id}
-              className="rounded-2xl border border-gray-200 p-4 dark:border-white/10"
-            >
-              <div className="font-medium text-gray-900 dark:text-white">
-                {t.name}
-              </div>
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Members: {t.members?.join(", ") || "—"}
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </Layout>
   );
@@ -413,25 +459,36 @@ function Details({
   team,
   reviews,
   rubric,
-  pointTotals
+  pointTotals,
 }: {
   team: Team | undefined;
   reviews: Review[];
   rubric: Rubric | null;
   pointTotals: boolean;
 }) {
+  useEffect(() => {
+    document
+      .getElementById("review-details")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const crits = rubric?.criteria || [];
   const criterionMax = (c: Criterion) =>
     Math.max(1, Math.round(Number(c.maxScore ?? rubric?.scaleMax ?? 5) || 5));
 
   // newest first
   const sorted = useMemo(
-    () => [...reviews].sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || "")),
-    [reviews]
+    () =>
+      [...reviews].sort((a, b) =>
+        (b.completedAt || "").localeCompare(a.completedAt || ""),
+      ),
+    [reviews],
   );
 
   return (
-    <div className="mt-6 rounded-2xl border border-gray-200 p-4 text-sm dark:border-white/10">
+    <div
+      id="review-details"
+      className="mt-6 rounded-2xl border border-gray-200 p-4 text-sm dark:border-white/10"
+    >
       <div className="mb-2 font-semibold">
         Judge breakdown for{" "}
         <span className="text-gray-900 dark:text-white">
@@ -448,11 +505,12 @@ function Details({
                 <th key={c.id} className="px-3 py-2 text-left">
                   {c.label}
                   <div className="text-[10px] text-gray-500">
-                    wt {c.weight} | max {criterionMax(c)}
+                    {!pointTotals && `Weight ${c.weight} · `}Max{" "}
+                    {criterionMax(c)}
                   </div>
                 </th>
               ))}
-              <th className="px-3 py-2 text-left">Raw</th>
+              {!pointTotals && <th className="px-3 py-2 text-left">Raw</th>}
               <th className="px-3 py-2 text-left">
                 {pointTotals ? "Score" : "Weighted"}
               </th>
@@ -474,19 +532,28 @@ function Details({
                       : "—"}
                   </td>
                 ))}
-                <td className="px-3 py-2">{Number(r.total || 0).toFixed(2)}</td>
+                {!pointTotals && (
+                  <td className="px-3 py-2">
+                    {Number(r.total || 0).toFixed(2)}
+                  </td>
+                )}
                 <td className="px-3 py-2">
                   {Number(pointTotals ? r.total : r.weightedTotal || 0).toFixed(
-                    2
+                    2,
                   )}
                 </td>
                 <td className="px-3 py-2 max-w-[24rem]">
-                  <div className="line-clamp-3" title={r.feedback || ""}>
+                  <div
+                    className="whitespace-pre-line min-w-48"
+                    title={r.feedback || ""}
+                  >
                     {r.feedback || "—"}
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  {r.completedAt ? new Date(r.completedAt).toLocaleString() : "—"}
+                  {r.completedAt
+                    ? new Date(r.completedAt).toLocaleString()
+                    : "—"}
                 </td>
               </tr>
             ))}
@@ -503,15 +570,6 @@ function Details({
           </tbody>
         </table>
       </div>
-
-      {/* Tiny legend */}
-      {crits.length > 0 && (
-        <div className="mt-3 text-[11px] text-gray-500 dark:text-gray-400">
-          {pointTotals
-            ? "Each criterion uses its own score range (0 to max). The score column matches the direct category point total."
-            : "Each criterion uses its own score range (0 to max). “Weighted” is the average of (criterion score × weight)."}
-        </div>
-      )}
     </div>
   );
 }

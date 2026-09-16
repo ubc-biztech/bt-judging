@@ -1,0 +1,133 @@
+import assert from "node:assert/strict";
+import {
+  phaseBlocker,
+  setupSteps,
+  submissionError,
+  withoutJudge,
+  withoutTeam,
+} from "../src/lib/ux";
+import { assignmentsFrom, excludeFromBlock } from "../src/lib/schedule";
+import { presetCodes, presetTeamCodes } from "../src/lib/codes";
+import type { JudgingAdminSetInput } from "@ubc-biztech/sdk";
+
+const event: JudgingAdminSetInput = {
+  settings: {
+    eventName: "Test event",
+    phase: "submission",
+    perTeamJudges: 1,
+    finalsTopN: 1,
+    finalsJudgeIds: ["j1"],
+    finalsTeamIds: ["t1"],
+    showTeamFeedback: false,
+    allowJudgeSeeOthers: false,
+    anonymizeTeams: false,
+    lockSubmissions: false,
+    maxImages: 2,
+    schedule: {
+      rooms: [{ id: "r1", name: "Room", judgeIds: ["j1"] }],
+      blocks: [{ id: "b1", label: "Block", startsAt: "10:00" }],
+      slots: [{ teamId: "t1", roomId: "r1", blockId: "b1" }],
+      exclusions: [],
+      changes: [],
+    },
+  },
+  rubric: {
+    name: "Rubric",
+    scaleMax: 5,
+    scoreMode: "points",
+    criteria: [{ id: "c1", label: "Criterion", maxScore: 5, weight: 1 }],
+  },
+  links: [],
+  judges: [
+    { id: "j1", name: "Jade Tran", code: "JADE", assignedTeamIds: ["t1"] },
+  ],
+  teams: [{ id: "t1", name: "Team One", members: [], code: "TEAMONE" }],
+};
+assert.equal(phaseBlocker(event, "prelim"), "");
+assert.equal(phaseBlocker(event, "finals"), "");
+assert.match(phaseBlocker({ ...event, rubric: null }, "prelim"), /rubric/);
+assert.match(
+  phaseBlocker(
+    { ...event, judges: [{ ...event.judges[0], assignedTeamIds: [] }] },
+    "prelim",
+  ),
+  /schedule/,
+);
+assert.match(
+  phaseBlocker(
+    { ...event, settings: { ...event.settings, finalsJudgeIds: [] } },
+    "finals",
+  ),
+  /judges/,
+);
+assert.ok(setupSteps(event).every((s) => s.done));
+assert.equal(setupSteps({ ...event, rubric: null })[0].done, false);
+const noTeam = withoutTeam(event, "t1");
+assert.equal(noTeam.teams.length, 0);
+assert.deepEqual(noTeam.judges[0].assignedTeamIds, []);
+assert.deepEqual(noTeam.settings.finalsTeamIds, []);
+assert.deepEqual(noTeam.settings.schedule?.slots, []);
+const noJudge = withoutJudge(event, "j1");
+assert.deepEqual(noJudge.settings.finalsJudgeIds, []);
+assert.deepEqual(noJudge.settings.schedule?.rooms[0].judgeIds, []);
+const reset = excludeFromBlock(event.settings.schedule!, "j1", "b1");
+assert.deepEqual(assignmentsFrom(reset, event.judges)[0].assignedTeamIds, []);
+assert.deepEqual(
+  assignmentsFrom(reset, event.judges)[0].assignedTeamIds,
+  [],
+  "Publishing again must not undo a reset",
+);
+assert.equal(
+  event.judges[0].assignedTeamIds?.length,
+  1,
+  "Helpers must preserve original data",
+);
+assert.equal(
+  presetCodes(
+    [{ name: "Jade Tao", code: undefined as string | undefined }],
+    ["JADE", "JADET"],
+    "first",
+  )[0].code,
+  "JADETAO",
+);
+assert.notEqual(
+  presetTeamCodes(
+    [{ name: "Team One", code: undefined as string | undefined }],
+    ["TEAMONE"],
+    "name",
+  )[0].code,
+  "TEAMONE",
+);
+assert.equal(
+  submissionError(
+    "https://github.com/example/project",
+    "",
+    ["https://example.test/image.png"],
+    2,
+  ),
+  "",
+);
+assert.match(submissionError("github.com/project", "", [], 2), /full GitHub/);
+assert.match(
+  submissionError(
+    "",
+    "",
+    ["https://example.test/a", "https://example.test/b"],
+    1,
+  ),
+  /Remove 1/,
+);
+assert.match(submissionError("", "", ["javascript:alert(1)"], 2), /full URL/);
+console.log(
+  "PASS phase prerequisites, setup readiness, removal cleanup, persistent assignment resets, code collisions, and submission validation",
+);
+
+const many = presetCodes(
+  Array.from({ length: 25 }, () => ({
+    name: "Jay Park",
+    code: undefined as string | undefined,
+  })),
+  [],
+  "first",
+);
+assert.equal(new Set(many.map((j) => j.code)).size, 25);

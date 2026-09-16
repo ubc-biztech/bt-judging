@@ -2,10 +2,11 @@
 
 import {
   ReactNode,
+  useEffect,
   useMemo,
   useState,
   type ComponentProps,
-  type ComponentType
+  type ComponentType,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -23,15 +24,20 @@ import {
   LinkIcon,
   QueueListIcon,
   ShieldCheckIcon,
-  SparklesIcon,
   TrophyIcon,
   UserGroupIcon,
-  XMarkIcon
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useClientSession, type Session } from "@/lib/session";
 import { DEFAULT_EVENT_NAME } from "@/lib/event";
 import { usePoll } from "@/lib/usePoll";
-import { logout, settingsOrDefaults } from "@/lib/bt";
+import { eventOrEmpty, logout, settingsOrDefaults } from "@/lib/bt";
+
+import { PHASE_LABELS } from "@/lib/ux";
+
+const hasUnsaved = () => !!document.querySelector('[data-unsaved="true"]');
+const canLeave = () =>
+  !hasUnsaved() || window.confirm("Leave without saving your changes?");
 
 type Role = Session["role"] | "guest";
 
@@ -58,51 +64,51 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           href: "/admin",
           hint: "Overview and quick access",
           icon: HomeIcon,
-          match: /^\/admin$/
+          match: /^\/admin$/,
         },
         {
           name: "Event Settings",
           href: "/admin/settings",
           hint: "Phase, locks, and visibility",
           icon: Cog6ToothIcon,
-          match: /^\/admin\/settings$/
+          match: /^\/admin\/settings$/,
         },
         {
           name: "Judges",
           href: "/admin/judges",
           hint: "Manage judge profiles",
           icon: UserGroupIcon,
-          match: /^\/admin\/judges$/
+          match: /^\/admin\/judges$/,
         },
         {
           name: "Teams",
           href: "/admin/teams",
           hint: "Edit team records and links",
           icon: ClipboardDocumentListIcon,
-          match: /^\/admin\/teams(?:\/.*)?$/
+          match: /^\/admin\/teams(?:\/.*)?$/,
         },
         {
           name: "Assignments",
           href: "/admin/assign",
           hint: "Exceptions: who skips what",
           icon: AdjustmentsHorizontalIcon,
-          match: /^\/admin\/assign$/
+          match: /^\/admin\/assign$/,
         },
         {
           name: "Schedule",
           href: "/admin/schedule",
           hint: "Rooms, blocks, who presents when",
           icon: CalendarDaysIcon,
-          match: /^\/admin\/schedule$/
+          match: /^\/admin\/schedule$/,
         },
         {
           name: "Rubric",
           href: "/admin/rubric",
           hint: "Criteria and weighting",
           icon: ClipboardDocumentCheckIcon,
-          match: /^\/admin\/rubric$/
-        }
-      ]
+          match: /^\/admin\/rubric$/,
+        },
+      ],
     },
     {
       name: "Operations",
@@ -112,31 +118,24 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           href: "/admin/links",
           hint: "Team demo and repo links",
           icon: LinkIcon,
-          match: /^\/admin\/links$/
+          match: /^\/admin\/links$/,
         },
         {
           name: "Finals Setup",
           href: "/admin/finals",
           hint: "Final judge/team workflow",
           icon: TrophyIcon,
-          match: /^\/admin\/finals$/
-        },
-        {
-          name: "Seed Teams",
-          href: "/admin/seed-teams",
-          hint: "Bulk import helper",
-          icon: SparklesIcon,
-          match: /^\/admin\/seed-teams$/
+          match: /^\/admin\/finals$/,
         },
         {
           name: "Live Results",
           href: "/results",
           hint: "Leaderboard and detail views",
           icon: ChartBarSquareIcon,
-          match: /^\/results$/
-        }
-      ]
-    }
+          match: /^\/results$/,
+        },
+      ],
+    },
   ],
   judge: [
     {
@@ -147,38 +146,38 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           href: "/judge",
           hint: "Review your prelim queue",
           icon: QueueListIcon,
-          match: /^\/judge(?:\/(?!finals(?:\/|$)|rubric(?:\/|$))[^/]+)?$/
+          match: /^\/judge(?:\/(?!finals(?:\/|$)|rubric(?:\/|$))[^/]+)?$/,
         },
         {
           name: "Schedule",
           href: "/schedule",
           hint: "Your room, block by block",
           icon: CalendarDaysIcon,
-          match: /^\/schedule$/
+          match: /^\/schedule$/,
         },
         {
           name: "Rubric",
           href: "/judge/rubric",
           hint: "Scoring reference",
           icon: ClipboardDocumentCheckIcon,
-          match: /^\/judge\/rubric$/
+          match: /^\/judge\/rubric$/,
         },
         {
           name: "Finals Queue",
           href: "/judge/finals",
           hint: "Final round scoring",
           icon: TrophyIcon,
-          match: /^\/judge\/finals(?:\/.*)?$/
+          match: /^\/judge\/finals(?:\/.*)?$/,
         },
         {
           name: "Results",
           href: "/results",
           hint: "Current leaderboard",
           icon: ChartBarSquareIcon,
-          match: /^\/results$/
-        }
-      ]
-    }
+          match: /^\/results$/,
+        },
+      ],
+    },
   ],
   team: [
     {
@@ -189,31 +188,24 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           href: "/submit",
           hint: "Project links, summary, assets",
           icon: ClipboardDocumentCheckIcon,
-          match: /^\/submit(?:\/.*)?$/
+          match: /^\/submit(?:\/.*)?$/,
         },
         {
           name: "Schedule",
           href: "/schedule",
           hint: "When and where you present",
           icon: CalendarDaysIcon,
-          match: /^\/schedule$/
+          match: /^\/schedule$/,
         },
         {
           name: "My Feedback",
           href: "/team/feedback",
           hint: "Judge notes and scores",
           icon: ClipboardDocumentListIcon,
-          match: /^\/team\/feedback$/
+          match: /^\/team\/feedback$/,
         },
-        {
-          name: "Results",
-          href: "/results",
-          hint: "Public standings view",
-          icon: ChartBarSquareIcon,
-          match: /^\/results$/
-        }
-      ]
-    }
+      ],
+    },
   ],
   guest: [
     {
@@ -224,21 +216,19 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
           href: "/auth",
           hint: "Admin, judge, or team access",
           icon: ShieldCheckIcon,
-          match: /^\/auth$/
+          match: /^\/auth$/,
         },
-        {
-          name: "Results",
-          href: "/results",
-          hint: "Leaderboard and team rankings",
-          icon: ChartBarSquareIcon,
-          match: /^\/results$/
-        }
-      ]
-    }
-  ]
+      ],
+    },
+  ],
 };
 
-const AVATAR: Record<Role, string> = { admin: "/org-avatar.svg", judge: "/judge-avatar.svg", team: "/default-avatar.svg", guest: "/default-avatar.svg" };
+const AVATAR: Record<Role, string> = {
+  admin: "/org-avatar.svg",
+  judge: "/judge-avatar.svg",
+  team: "/default-avatar.svg",
+  guest: "/default-avatar.svg",
+};
 
 function roleFromSession(session: Session | null): Role {
   return session?.role ?? "guest";
@@ -253,7 +243,8 @@ function homeHrefForRole(role: Role) {
 
 function roleDisplayName(session: Session | null) {
   if (!session) return "Not signed in";
-  if (session.role === "admin") return session.name || session.id || "Organizer";
+  if (session.role === "admin")
+    return session.name || session.id || "Organizer";
   if (session.role === "judge") return session.name || "Judge";
   return session.name || "Team";
 }
@@ -264,7 +255,15 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Polled so a phase change by an organizer shows up in every open tab. Re-fetched when the
   // session changes, because what settingsOrDefaults may read depends on who is signed in.
-  const { data: settings } = usePoll(settingsOrDefaults, [session?.role, session?.id], 15000);
+  const { data: event } = usePoll(
+    async () =>
+      session
+        ? eventOrEmpty()
+        : { settings: await settingsOrDefaults(), links: [] },
+    [session?.role, session?.id],
+    15000,
+  );
+  const settings = event?.settings;
   const eventName = settings?.eventName?.trim() || DEFAULT_EVENT_NAME;
   const phase = settings?.phase ?? "";
   const showTeamFeedback = settings?.showTeamFeedback !== false;
@@ -275,13 +274,20 @@ export default function Layout({ children }: { children: ReactNode }) {
       ? rawPath.slice(0, -1)
       : rawPath;
   const role = roleFromSession(session);
-  const showJudgeFinals = phase === "finals";
+  const showJudgeFinals =
+    phase === "finals" &&
+    !!session &&
+    !!settings?.finalsJudgeIds.includes(session.id);
   const sections = useMemo(() => {
     const base = NAV_BY_ROLE[role];
     return base.map((section) => ({
       ...section,
       items: section.items.filter((item) => {
-        if (role === "judge" && !showJudgeFinals && item.href === "/judge/finals") {
+        if (
+          role === "judge" &&
+          !showJudgeFinals &&
+          item.href === "/judge/finals"
+        ) {
           return false;
         }
         if (
@@ -292,7 +298,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           return false;
         }
         return true;
-      })
+      }),
     }));
   }, [role, showJudgeFinals, showTeamFeedback]);
   const flatItems = sections.flatMap((section) => section.items);
@@ -300,8 +306,54 @@ export default function Layout({ children }: { children: ReactNode }) {
   const pageTitle = activeItem?.name || eventName;
 
   function signOut() {
+    if (!canLeave()) return;
+    document
+      .querySelectorAll('[data-unsaved="true"]')
+      .forEach((el) => el.setAttribute("data-unsaved", "false"));
     void logout().finally(() => router.replace("/auth"));
   }
+
+  useEffect(() => {
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsaved()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    const onLink = (e: MouseEvent) => {
+      const a = (e.target as Element).closest?.(
+        "a[href]",
+      ) as HTMLAnchorElement | null;
+      if (
+        !a ||
+        e.defaultPrevented ||
+        e.button !== 0 ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey ||
+        a.target === "_blank" ||
+        a.download
+      )
+        return;
+      if (
+        a.origin === location.origin &&
+        a.pathname === location.pathname &&
+        a.search === location.search
+      )
+        return;
+      if (!canLeave()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", onLink, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", onLink, true);
+    };
+  }, []);
 
   const accountLabel = useMemo(() => roleDisplayName(session), [session]);
 
@@ -310,7 +362,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div
         className={[
           "flex items-center justify-between border-b border-white/[0.08]",
-          mobile ? "gap-2 pb-4 pr-3" : "gap-3 pb-5"
+          mobile ? "gap-2 pb-4 pr-3" : "gap-3 pb-5",
         ].join(" ")}
       >
         <Link
@@ -320,7 +372,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         >
           <div>
             <img src="/hh.svg" alt="HelloHacks" className="mb-2 h-10 w-auto" />
-            <p className="text-base font-semibold tracking-tight text-white">{eventName}</p>
+            <p className="text-base font-semibold tracking-tight text-white">
+              {eventName}
+            </p>
             <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
               Judging Portal
             </p>
@@ -343,7 +397,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <p
               className={[
                 "mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500",
-                mobile ? "pr-3" : ""
+                mobile ? "pr-3" : "",
               ].join(" ")}
             >
               {section.name}
@@ -361,7 +415,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                         mobile ? "w-full" : "",
                         active
                           ? "bg-white/[0.05] text-white"
-                          : "text-slate-300 hover:bg-white/[0.03] hover:text-white"
+                          : "text-slate-300 hover:bg-white/[0.03] hover:text-white",
                       ].join(" ")}
                     >
                       <item.icon
@@ -369,7 +423,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                           "size-4 shrink-0",
                           active
                             ? "text-cyan-200"
-                            : "text-slate-500 group-hover:text-slate-200"
+                            : "text-slate-500 group-hover:text-slate-200",
                         ].join(" ")}
                       />
                       <span className="block min-w-0 truncate text-sm font-medium">
@@ -384,11 +438,40 @@ export default function Layout({ children }: { children: ReactNode }) {
         ))}
       </div>
 
-      <div className={["mt-6 flex items-center gap-3 border-t border-white/[0.08] pt-5", mobile ? "pr-3" : ""].join(" ")}>
-        <img src={AVATAR[role]} alt="" className="size-9 shrink-0 rounded-full" />
+      {!!event?.links.length && (
+        <div className="mt-5 space-y-2 border-t border-white/10 pt-4">
+          <p className="text-xs text-slate-500">Event links</p>
+          {event.links.map((link) => (
+            <a
+              key={link.id}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-sm text-slate-300 hover:text-white"
+            >
+              {link.label} ↗
+            </a>
+          ))}
+        </div>
+      )}
+      <div
+        className={[
+          "mt-6 flex items-center gap-3 border-t border-white/[0.08] pt-5",
+          mobile ? "pr-3" : "",
+        ].join(" ")}
+      >
+        <img
+          src={AVATAR[role]}
+          alt=""
+          className="size-9 shrink-0 rounded-full"
+        />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Signed In</p>
-          <p className="mt-0.5 truncate text-sm font-medium text-slate-100">{accountLabel}</p>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+            Signed In
+          </p>
+          <p className="mt-0.5 truncate text-sm font-medium text-slate-100">
+            {accountLabel}
+          </p>
         </div>
         {ready && session ? (
           <button
@@ -414,8 +497,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-[#050505] text-slate-100">
-      <div className="pointer-events-none absolute inset-0">
-      </div>
+      <div className="pointer-events-none absolute inset-0"></div>
 
       <Dialog
         open={sidebarOpen}
@@ -475,6 +557,16 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <main className="mx-auto max-w-7xl px-3 pb-10 pt-6 sm:px-6 sm:pt-7 lg:px-8">
+          {role === "admin" && settings && path !== "/admin" && (
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
+              <span>
+                Current phase: <strong>{PHASE_LABELS[settings.phase]}</strong>
+              </span>
+              <Link href="/admin#phase" className="font-semibold underline">
+                Manage phase →
+              </Link>
+            </div>
+          )}
           {children}
         </main>
       </div>
