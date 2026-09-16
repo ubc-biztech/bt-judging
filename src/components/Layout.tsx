@@ -491,7 +491,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             {accountLabel}
           </p>
         </div>
-        {ready && session ? (
+        {ready && session && (
           <button
             onClick={signOut}
             title="Sign out"
@@ -500,14 +500,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           >
             <ArrowRightOnRectangleIcon className="size-4" />
           </button>
-        ) : (
-          <Link
-            href="/auth"
-            onClick={() => mobile && setSidebarOpen(false)}
-            className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/[0.08]"
-          >
-            Sign In
-          </Link>
         )}
       </div>
     </div>
