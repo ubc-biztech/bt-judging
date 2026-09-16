@@ -225,7 +225,7 @@ function Page() {
           <button
             type="submit"
             disabled={creating || loading}
-            className="h-11 shrink-0 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-50"
+            className="ux-primary shrink-0"
           >
             {creating ? "Creating…" : "Create"}
           </button>

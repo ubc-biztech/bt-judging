@@ -5,6 +5,7 @@ import RoleGate from "@/components/RoleGate";
 import { Status } from "@/components/Feedback";
 import SubmissionFields, {
   submissionDraft,
+  submissionKey,
   imageLinks,
   type SubmissionDraft,
 } from "@/components/SubmissionFields";
@@ -37,10 +38,10 @@ function Page() {
     if (!team || loadedFor === team.id) return;
     const d = submissionDraft(team);
     setDraft(d);
-    setSaved(JSON.stringify(d));
+    setSaved(submissionKey(d));
     setLoadedFor(team.id);
   }, [team, loadedFor]);
-  const dirty = !!draft && JSON.stringify(draft) !== saved;
+  const dirty = !!draft && submissionKey(draft) !== saved;
   const closed = settings?.phase !== "submission" || settings?.lockSubmissions;
   async function save() {
     if (!team || !draft || busy || closed) return;
@@ -79,17 +80,15 @@ function Page() {
         fresh.settings.maxImages,
       );
       if (limitError) throw new Error(limitError);
-      await judging()
-        .team(team.id)
-        .update({
-          name: current.name,
-          members: current.members,
-          github: draft.github.trim(),
-          devpost: draft.devpost.trim(),
-          description: draft.description.trim(),
-          imageUrls: urls,
-        });
-      setSaved(JSON.stringify(draft));
+      await judging().team(team.id).update({
+        name: current.name,
+        members: current.members,
+        github: draft.github.trim(),
+        devpost: draft.devpost.trim(),
+        description: draft.description.trim(),
+        imageUrls: urls,
+      });
+      setSaved(submissionKey(draft));
       setNotice("Submission saved.");
       void poll.refresh();
     } catch (e) {

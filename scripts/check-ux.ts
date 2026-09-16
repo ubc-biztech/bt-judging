@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  imageLinks,
+  submissionDraft,
+  submissionKey,
+} from "../src/components/SubmissionFields";
+import {
   phaseBlocker,
   setupSteps,
   submissionError,
@@ -203,6 +208,38 @@ assert.match(
 );
 console.log(
   "PASS occupied-slot guard, auto-fill preservation, unscheduling assignments, stale data, duplicate teams/times, and judge conflicts including exclusions",
+);
+
+const imageDraft = submissionDraft({
+  imageUrls: [
+    "https://example.test/first.png",
+    "https://example.test/second.png",
+  ],
+});
+assert.deepEqual(imageDraft.images, [
+  "https://example.test/first.png",
+  "https://example.test/second.png",
+]);
+assert.deepEqual(
+  imageLinks([
+    " https://example.test/first.png ",
+    "",
+    "https://example.test/second.png",
+  ]),
+  imageDraft.images,
+);
+assert.equal(
+  submissionKey({ ...imageDraft, images: [...imageDraft.images, ""] }),
+  submissionKey(imageDraft),
+  "An empty added image row must not mark the submission dirty",
+);
+assert.notEqual(
+  submissionKey({ ...imageDraft, images: imageDraft.images.slice(1) }),
+  submissionKey(imageDraft),
+  "Removing a saved image must mark the submission dirty",
+);
+console.log(
+  "PASS separate image URLs, whitespace normalization, empty-row handling, and image-removal state",
 );
 
 const many = presetCodes(

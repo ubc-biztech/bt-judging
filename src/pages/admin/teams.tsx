@@ -283,10 +283,7 @@ function Page() {
             value={form.members}
             onChange={(e) => setForm({ ...form, members: e.target.value })}
           />
-          <button
-            type="submit"
-            className="h-11 shrink-0 rounded-lg bg-white px-6 text-sm font-semibold text-black transition hover:bg-slate-200"
-          >
+          <button type="submit" className="ux-primary shrink-0">
             {busy ? "Saving…" : "Create"}
           </button>
         </form>

@@ -130,10 +130,7 @@ function Page() {
           <p className="text-sm text-slate-300">
             Schedule teams and judges before editing assignments.
           </p>
-          <Link
-            href="/admin/schedule"
-            className="mt-4 inline-block rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-slate-200"
-          >
+          <Link href="/admin/schedule" className="ux-primary mt-4">
             Open schedule
           </Link>
         </div>
@@ -171,7 +168,7 @@ function Page() {
             Discard
           </button>
           <button
-            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-slate-200 disabled:opacity-50"
+            className="ux-primary"
             disabled={!dirty || busy}
             onClick={save}
           >

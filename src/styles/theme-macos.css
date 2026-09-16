@@ -72,10 +72,6 @@
 .shadow-\[inset_0_0_0_1px_rgba\(255\,255\,255\,0\.02\)\] { box-shadow: none; }
 .shadow-\[18px_0_40px_rgba\(0\,0\,0\,0\.18\)\], .shadow-\[24px_0_60px_rgba\(0\,0\,0\,0\.34\)\] { box-shadow: 12px 0 32px rgba(0, 0, 0, 0.06); }
 
-/* ─── Primary buttons: white-on-black becomes the blue pill ─── */
-.bg-white.text-black, .bg-indigo-600 { background-color: var(--blue); color: #fff; border-radius: 9999px; }
-.hover\:bg-slate-200:hover, .hover\:bg-indigo-700:hover { background-color: var(--blue-2); }
-
 /* ─── Accent text that was tuned for a dark ground ─── */
 .text-amber-200, .text-amber-300 { color: #b45309; }
 .text-rose-200, .text-rose-300, .text-rose-400 { color: #dc2626; }

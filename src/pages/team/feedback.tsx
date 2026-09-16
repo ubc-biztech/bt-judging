@@ -131,12 +131,7 @@ function Page() {
             key={t}
             aria-pressed={tab === t}
             onClick={() => setTab(t)}
-            className={[
-              "px-3 py-1.5 text-xs rounded-md",
-              tab === t
-                ? "bg-indigo-600 text-white"
-                : "text-gray-700 dark:text-gray-300",
-            ].join(" ")}
+            className="ux-tab"
           >
             {t === "prelim" ? "Preliminary Round" : "Final Round"}
           </button>
