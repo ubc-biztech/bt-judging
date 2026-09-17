@@ -22,6 +22,7 @@ import {
   assignmentsFrom,
   autoFill,
   describeChanges,
+  isDoubleBooked,
   newId,
   place,
   scheduleErrors,
@@ -133,9 +134,16 @@ function Page() {
     try {
       const before = slotOf(s, teamId);
       if (before?.blockId === blockId && before.roomId === roomId) return true;
+      // Landing on a taken slot is allowed so two teams can be swapped one drag at a
+      // time; the slot reads as double-booked until the other team moves off it.
+      const sharing = slotAt(s, blockId, roomId).filter(
+        (x) => x.teamId !== teamId,
+      );
       update(
         place(s, teamId, blockId, roomId),
-        `${teamName(teamId)} ${before ? "moved" : "scheduled"}.`,
+        sharing.length
+          ? `${teamName(teamId)} shares this slot with ${sharing.map((x) => teamName(x.teamId)).join(", ")}. Move one out before publishing.`
+          : `${teamName(teamId)} ${before ? "moved" : "scheduled"}.`,
       );
       return true;
     } catch (e) {
@@ -585,7 +593,9 @@ function Page() {
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-[var(--ink-3)]">
-            Use the buttons below, or drag teams between empty slots.
+            Use the buttons below, or drag teams between slots. Dropping a team
+            on a taken slot double-books it in red while you swap; publishing
+            waits until no slot is red.
           </p>
           {s.blocks.length > 0 && (
             <label className="flex flex-wrap items-center gap-2 text-sm">
@@ -652,57 +662,68 @@ function Page() {
                       </span>
                     )}
                   </th>
-                  {s.rooms.map((r) => (
-                    <td
-                      key={r.id}
-                      {...dropProps(`${b.id}|${r.id}`, (id) =>
-                        move(id, b.id, r.id),
-                      )}
-                      className={`min-w-52 border-t border-l border-[var(--line)] p-2 align-top ${dropRing(`${b.id}|${r.id}`)}`}
-                    >
-                      <div className="space-y-2">
-                        {slotAt(s, b.id, r.id).map((x) => (
-                          <div
-                            key={x.teamId}
-                            {...dragProps(x.teamId)}
-                            className={`rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 ${dragging === x.teamId ? "opacity-40" : ""}`}
+                  {s.rooms.map((r) => {
+                    const clash = isDoubleBooked(s, b.id, r.id);
+                    return (
+                      <td
+                        key={r.id}
+                        {...dropProps(`${b.id}|${r.id}`, (id) =>
+                          move(id, b.id, r.id),
+                        )}
+                        className={`min-w-52 border-t border-l border-[var(--line)] p-2 align-top ${clash ? "bg-rose-500/10" : ""} ${dropRing(`${b.id}|${r.id}`)}`}
+                      >
+                        {clash && (
+                          <p
+                            role="alert"
+                            className="mb-2 text-xs font-semibold text-rose-600"
                           >
-                            <div className="break-words font-medium">
-                              {teamName(x.teamId)}
+                            Double-booked — move one team out
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          {slotAt(s, b.id, r.id).map((x) => (
+                            <div
+                              key={x.teamId}
+                              {...dragProps(x.teamId)}
+                              className={`rounded-lg border bg-[var(--paper)] p-3 ${clash ? "border-rose-500" : "border-[var(--line)]"} ${dragging === x.teamId ? "opacity-40" : ""}`}
+                            >
+                              <div className="break-words font-medium">
+                                {teamName(x.teamId)}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                <button
+                                  className={action}
+                                  aria-label={`Move ${teamName(x.teamId)}`}
+                                  onClick={() => openPicker(x.teamId)}
+                                >
+                                  Move
+                                </button>
+                                <button
+                                  className={`${action} !text-[var(--ink-3)]`}
+                                  aria-label={`Unschedule ${teamName(x.teamId)}`}
+                                  onClick={() => unschedule(x.teamId)}
+                                >
+                                  Unschedule
+                                </button>
+                              </div>
                             </div>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              <button
-                                className={action}
-                                aria-label={`Move ${teamName(x.teamId)}`}
-                                onClick={() => openPicker(x.teamId)}
-                              >
-                                Move
-                              </button>
-                              <button
-                                className={`${action} !text-[var(--ink-3)]`}
-                                aria-label={`Unschedule ${teamName(x.teamId)}`}
-                                onClick={() => unschedule(x.teamId)}
-                              >
-                                Unschedule
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {!slotAt(s, b.id, r.id).length && (
-                        <button
-                          className="min-h-24 w-full rounded-lg border border-dashed border-[var(--line)] px-3 py-5 text-sm text-[var(--blue)] disabled:text-[var(--ink-3)]"
-                          disabled={!free.length}
-                          aria-label={`Add team to ${b.label}, ${r.name}`}
-                          onClick={() =>
-                            openPicker("", { blockId: b.id, roomId: r.id })
-                          }
-                        >
-                          {free.length ? "+ Add team" : "Empty slot"}
-                        </button>
-                      )}
-                    </td>
-                  ))}
+                          ))}
+                        </div>
+                        {!slotAt(s, b.id, r.id).length && (
+                          <button
+                            className="min-h-24 w-full rounded-lg border border-dashed border-[var(--line)] px-3 py-5 text-sm text-[var(--blue)] disabled:text-[var(--ink-3)]"
+                            disabled={!free.length}
+                            aria-label={`Add team to ${b.label}, ${r.name}`}
+                            onClick={() =>
+                              openPicker("", { blockId: b.id, roomId: r.id })
+                            }
+                          >
+                            {free.length ? "+ Add team" : "Empty slot"}
+                          </button>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -825,14 +846,14 @@ function Page() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!picker.teamId || !picker.blockId || !picker.roomId) {
-                      setPickerError("Choose a team and an empty slot.");
+                      setPickerError("Choose a team and a slot.");
                       return;
                     }
                     if (move(picker.teamId, picker.blockId, picker.roomId))
                       setPicker(null);
                     else
                       setPickerError(
-                        "That slot is occupied. Choose an empty slot.",
+                        "That room or time block is gone. Reload the schedule.",
                       );
                   }}
                   className="space-y-5"
@@ -881,16 +902,15 @@ function Page() {
                       }}
                       required
                     >
-                      <option value="">Choose an empty slot</option>
+                      <option value="">Choose a slot</option>
                       {cells.map((c) => (
                         <option
                           key={`${c.blockId}|${c.roomId}`}
                           value={`${c.blockId}|${c.roomId}`}
-                          disabled={!available(c, picker.teamId)}
                         >
                           {c.label}
                           {!available(c, picker.teamId)
-                            ? ` — occupied by ${slotAt(s, c.blockId, c.roomId)
+                            ? ` — taken by ${slotAt(s, c.blockId, c.roomId)
                                 .map((x) => teamName(x.teamId))
                                 .join(", ")}`
                             : ""}
