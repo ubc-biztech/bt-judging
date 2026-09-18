@@ -23,6 +23,9 @@ export const unscheduled = <T extends Pick<JudgingTeam, "id">>(
   s: Schedule,
   teams: T[],
 ): T[] => teams.filter((t) => !slotOf(s, t.id));
+/** Two teams in one room at one time: fine mid-swap, never publishable. */
+export const isDoubleBooked = (s: Schedule, blockId: string, roomId: string) =>
+  slotAt(s, blockId, roomId).length > 1;
 
 /** Every judge's teams, in block order, from the room they sit in. Judges in no room keep an empty list. */
 export const isExcluded = (s: Schedule, judgeId: string, teamId: string) =>
@@ -123,7 +126,11 @@ export function withChanges(
   };
 }
 
-/** Move a team to a block and room; the team's previous slot is dropped. */
+/**
+ * Move a team to a block and room; the team's previous slot is dropped. Dropping onto a
+ * taken slot double-books it, which is allowed while swapping two teams around; publishing
+ * is what refuses it, via `scheduleErrors`.
+ */
 export function place(
   s: Schedule,
   teamId: string,
@@ -135,10 +142,6 @@ export function place(
     !s.rooms.some((r) => r.id === roomId)
   )
     throw new Error("Choose an existing room and time block.");
-  if (slotAt(s, blockId, roomId).some((x) => x.teamId !== teamId))
-    throw new Error(
-      "That slot is occupied. Move or unschedule its team first.",
-    );
   return {
     ...s,
     slots: [
@@ -242,7 +245,7 @@ export function scheduleErrors(
     const cell = `${x.blockId}|${x.roomId}`;
     if (seenCells.has(cell))
       errors.add(
-        `${block.label} / ${room.name}: move a team to an empty slot.`,
+        `${block.label} / ${room.name} is double-booked. Move a team to an empty slot.`,
       );
     seenCells.add(cell);
     const assigned = room.judgeIds.filter((id) => !isExcluded(s, id, x.teamId));

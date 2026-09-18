@@ -63,7 +63,17 @@ export const bt = createClient({
     const s = getSession();
     return s && s.role !== "admin" ? s.code : null;
   },
-  getToken: () => (getSession()?.role === "admin" ? cognitoIdToken() : null),
+  getToken: async () => {
+    if (getSession()?.role !== "admin") return null;
+    const token = await cognitoIdToken();
+    // The app session says organizer but Cognito has nothing (expired, or signed out elsewhere):
+    // drop the stale session and go back to sign-in instead of showing every page an error.
+    if (!token && typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+      clearSession();
+      window.location.replace("/auth");
+    }
+    return token;
+  },
 });
 
 /** This deployment's event: `bt.judging("hellohacks", 2026)`. */

@@ -14,7 +14,9 @@ import {
 import {
   assignmentsFrom,
   excludeFromBlock,
+  isDoubleBooked,
   place,
+  slotAt,
   unplace,
   autoFill,
   scheduleErrors,
@@ -134,13 +136,28 @@ console.log(
   "PASS phase prerequisites, setup readiness, removal cleanup, persistent assignment resets, code collisions, and submission validation",
 );
 
-// Scheduling must never overwrite a team or double-book a room.
+// Placing a team on a taken slot double-books it for the length of a swap: nothing is
+// overwritten, the cell reads as a conflict, and publishing refuses it.
 const scheduled = event.settings.schedule!;
 const twoTeams = [
   ...event.teams.map((t) => ({ ...t, id: t.id! })),
   { id: "t2", name: "Team Two", members: [] },
 ];
-assert.throws(() => place(scheduled, "t2", "b1", "r1"), /occupied/);
+const shared = place(scheduled, "t2", "b1", "r1");
+assert.deepEqual(
+  slotAt(shared, "b1", "r1").map((x) => x.teamId),
+  ["t1", "t2"],
+);
+assert.ok(isDoubleBooked(shared, "b1", "r1"));
+assert.match(
+  scheduleErrors(shared, twoTeams, event.judges).join(" "),
+  /double-booked/,
+);
+// Moving the other team out clears it, and neither placement was lost on the way.
+assert.deepEqual(
+  scheduleErrors(unplace(shared, "t1"), twoTeams, event.judges),
+  [],
+);
 assert.throws(() => place(scheduled, "t2", "missing", "r1"), /existing/);
 assert.equal(scheduled.slots[0].teamId, "t1");
 const filled = autoFill(scheduled, twoTeams, 20);
@@ -148,6 +165,17 @@ assert.equal(filled.blocks.length, 2);
 assert.equal(filled.blocks[1].startsAt, "10:20");
 assert.deepEqual(filled.slots[0], scheduled.slots[0]);
 assert.deepEqual(scheduleErrors(filled, twoTeams, event.judges), []);
+// A swap of two scheduled teams passes through a double-booked slot and comes out clean.
+const swapping = place(filled, "t1", filled.blocks[1].id, "r1");
+assert.ok(isDoubleBooked(swapping, filled.blocks[1].id, "r1"));
+assert.match(
+  scheduleErrors(swapping, twoTeams, event.judges).join(" "),
+  /double-booked/,
+);
+assert.deepEqual(
+  scheduleErrors(place(swapping, "t2", "b1", "r1"), twoTeams, event.judges),
+  [],
+);
 assert.deepEqual(
   assignmentsFrom(unplace(filled, "t1"), event.judges)[0].assignedTeamIds,
   ["t2"],
@@ -207,7 +235,7 @@ assert.match(
   /no judges/,
 );
 console.log(
-  "PASS occupied-slot guard, auto-fill preservation, unscheduling assignments, stale data, duplicate teams/times, and judge conflicts including exclusions",
+  "PASS double-booking held until publish, swaps, auto-fill preservation, unscheduling assignments, stale data, duplicate teams/times, and judge conflicts including exclusions",
 );
 
 const imageDraft = submissionDraft({

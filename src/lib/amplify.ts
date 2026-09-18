@@ -6,6 +6,10 @@
  * (`<origin>/login`); until then use email + password.
  */
 import { Amplify } from "aws-amplify";
+// Registers the handler that exchanges the ?code on the hosted-UI redirect for tokens. Amplify only
+// registers it as a side effect of importing signInWithRedirect, which the callback page never
+// calls, so production tree-shaking drops it and /login hangs on "Signing you in…".
+import "aws-amplify/auth/enable-oauth-listener";
 
 const env = (k: string) => process.env[k]?.trim() || undefined;
 
