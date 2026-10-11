@@ -32,6 +32,7 @@ import {
   EVENT,
   EVENT_ID,
   fallbackEventName,
+  isProductPlus,
 } from "./event";
 import { clearSession, getSession, setSession, type Session } from "./session";
 
@@ -68,7 +69,11 @@ export const bt = createClient({
     const token = await cognitoIdToken();
     // The app session says organizer but Cognito has nothing (expired, or signed out elsewhere):
     // drop the stale session and go back to sign-in instead of showing every page an error.
-    if (!token && typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+    if (
+      !token &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/auth")
+    ) {
       clearSession();
       window.location.replace("/auth");
     }
@@ -305,8 +310,33 @@ export async function saveEvent(
 export const patchSettings = (patch: Partial<JudgingSettings>) =>
   saveEvent((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
 
-export const setRubric = (rubric: Rubric | null) =>
-  saveEvent((d) => ({ ...d, rubric }));
+export async function setRubric(rubric: Rubric | null) {
+  // Stored review totals are authoritative. Changing scoring after reviews exist
+  // would mix incompatible totals; guidance-only edits do not change those totals.
+  const hasReviews = isProductPlus() && (await listReviews()).length > 0;
+  return saveEvent((d) => {
+    const scoring = (r: Rubric | null | undefined) =>
+      JSON.stringify({
+        scaleMax: r?.scaleMax,
+        scoreMode: r?.scoreMode,
+        criteria: r?.criteria.map((c) => ({
+          id: c.id,
+          label: c.label,
+          maxScore: c.maxScore,
+          weight: Number(c.weight.toPrecision(12)),
+        })),
+      });
+    if (
+      isProductPlus() &&
+      (hasReviews || d.settings.phase !== "submission") &&
+      scoring(rubric) !== scoring(d.rubric)
+    )
+      throw new Error(
+        "Judging has started or reviews exist. Keep the criteria, score limits, and weights unchanged; you can still clarify the scoring guidance.",
+      );
+    return { ...d, rubric };
+  });
+}
 
 export const setLinks = (
   links:

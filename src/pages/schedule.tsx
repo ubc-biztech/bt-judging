@@ -60,7 +60,7 @@ function Page() {
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-400">
           {doc?.settings.phase === "finals"
-            ? "Preliminary presentation schedule. Finals assignments are in the finals queue."
+            ? "Assigned presentation schedule. Finals assignments are in the finals queue."
             : session?.role === "admin"
               ? "Published schedule"
               : "Live schedule · Your slots are highlighted."}

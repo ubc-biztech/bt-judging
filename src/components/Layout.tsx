@@ -34,7 +34,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useClientSession, type Session } from "@/lib/session";
-import { fallbackEventName } from "@/lib/event";
+import { fallbackEventName, isProductPlus } from "@/lib/event";
 import EventBrand from "./EventBrand";
 import { EventPicker } from "./EventProvider";
 import { usePoll } from "@/lib/usePoll";
@@ -158,7 +158,7 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Assigned Teams",
           href: "/judge",
-          hint: "Review your prelim queue",
+          hint: "Review your assigned teams",
           icon: QueueListIcon,
           match: /^\/judge(?:\/(?!finals(?:\/|$)|rubric(?:\/|$))[^/]+)?$/,
         },
@@ -320,7 +320,10 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, [role, showJudgeFinals, showTeamFeedback, showJudgeResults]);
   const flatItems = sections.flatMap((section) => section.items);
   const activeItem = flatItems.find((item) => item.match.test(path)) || null;
-  const pageTitle = activeItem?.name || eventName;
+  const pageTitle =
+    isProductPlus() && role === "judge" && activeItem?.href === "/judge"
+      ? "Semifinals"
+      : activeItem?.name || eventName;
 
   function signOut() {
     if (!canLeave()) return;
@@ -454,7 +457,11 @@ export default function Layout({ children }: { children: ReactNode }) {
                         ].join(" ")}
                       />
                       <span className="block min-w-0 text-sm font-medium">
-                        {item.name}
+                        {isProductPlus() &&
+                        role === "judge" &&
+                        item.href === "/judge"
+                          ? "Semifinals"
+                          : item.name}
                       </span>
                     </Link>
                   </li>

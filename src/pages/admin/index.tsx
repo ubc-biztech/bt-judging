@@ -8,6 +8,7 @@ import { Status } from "@/components/Feedback";
 import { eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
 import { usePoll } from "@/lib/usePoll";
 import { setupSteps } from "@/lib/ux";
+import { roundLabel } from "@/lib/event";
 
 export default dynamic(
   () =>
@@ -87,7 +88,11 @@ function Page() {
             {[
               ["Teams", doc.teams.length, "/admin/teams"],
               ["Judges", doc.judges.length, "/admin/judges"],
-              ["Prelim reviews", `${completed} / ${expected}`, "/results"],
+              [
+                `${roundLabel("prelim")} reviews`,
+                `${completed} / ${expected}`,
+                "/results",
+              ],
             ].map(([label, value, href]) => (
               <Link
                 key={label}

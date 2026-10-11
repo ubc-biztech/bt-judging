@@ -1,11 +1,13 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { Criterion } from "@/lib/types";
+import { isProductPlus } from "@/lib/event";
 import {
   criterionMax,
   rubricTotalMax,
   rubricUsesPointTotals,
 } from "@/lib/judging";
 import { Status } from "./Feedback";
+import ScoringGuide from "./ScoringGuide";
 
 export default function RubricForm({
   criteria,
@@ -17,6 +19,7 @@ export default function RubricForm({
   scoreMode,
   readOnly = false,
   afterSave,
+  minScore = 0,
 }: {
   criteria: Criterion[];
   scaleMax: number;
@@ -30,6 +33,7 @@ export default function RubricForm({
   defaultFeedback?: string;
   readOnly?: boolean;
   afterSave?: ReactNode;
+  minScore?: number;
 }) {
   const criterionNodes = useRef<Record<string, HTMLElement | null>>({});
   // The parent mounts one form per team and round, after loading the existing review.
@@ -53,7 +57,7 @@ export default function RubricForm({
   const complete = criteria.every(
     (c) =>
       Number.isInteger(scores[c.id]) &&
-      scores[c.id] >= 0 &&
+      scores[c.id] >= minScore &&
       scores[c.id] <= criterionMax(c, scaleMax),
   );
   const total = criteria.reduce((n, c) => n + (scores[c.id] ?? 0), 0);
@@ -68,12 +72,14 @@ export default function RubricForm({
         setNotice("");
         if (!complete) {
           setError(
-            "Choose a score for every criterion. Zero is a valid score.",
+            minScore === 1
+              ? "Choose a score from 1 to 10 for every criterion."
+              : "Choose a score for every criterion. Zero is a valid score.",
           );
           const missing = criteria.find(
             (c) =>
               !Number.isInteger(scores[c.id]) ||
-              scores[c.id] < 0 ||
+              scores[c.id] < minScore ||
               scores[c.id] > criterionMax(c, scaleMax),
           );
           if (missing) {
@@ -109,8 +115,8 @@ export default function RubricForm({
         {dirty && <span className="text-amber-300">Unsaved changes</span>}
       </div>
       <fieldset disabled={readOnly || submitting} className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {criteria.map((c) => {
+        <div className="scorecard-criteria">
+          {criteria.map((c, index) => {
             const max = criterionMax(c, scaleMax);
             const score = scores[c.id];
             return (
@@ -121,34 +127,33 @@ export default function RubricForm({
                 }}
                 tabIndex={-1}
                 aria-label={c.label}
-                className="rounded-xl border border-white/10 p-4 space-y-3 focus-visible:outline-2 focus-visible:outline-[var(--blue)]"
+                className="scorecard-criterion focus-visible:outline-2 focus-visible:outline-[var(--blue)]"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="font-semibold">{c.label}</h2>
+                  <h2 className="text-lg font-semibold">
+                    <span className="criterion-number">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {c.label}
+                  </h2>
                   <span className="shrink-0 text-sm text-slate-400">
                     / {max}
-                    {!points && ` · ×${c.weight}`}
+                    {!points &&
+                      (isProductPlus()
+                        ? ` · ${((c.weight / criteria.reduce((n, item) => n + item.weight, 0)) * 100).toFixed(1)}%`
+                        : ` · ×${c.weight}`)}
                   </span>
                 </div>
-                {c.description && (
-                  <details>
-                    <summary className="text-sm text-slate-400">
-                      Scoring guide
-                    </summary>
-                    <p className="mt-2 whitespace-pre-line text-sm text-slate-300">
-                      {c.description}
-                    </p>
-                  </details>
-                )}
+                <ScoringGuide description={c.description} score={score} />
                 {max > 10 ? (
                   <div className="space-y-2">
                     <input
                       aria-label={`${c.label} slider`}
                       type="range"
-                      min={0}
+                      min={minScore}
                       max={max}
                       step={1}
-                      value={score ?? 0}
+                      value={score ?? minScore}
                       className="w-full"
                       onChange={(e) =>
                         setScores({ ...scores, [c.id]: Number(e.target.value) })
@@ -160,7 +165,7 @@ export default function RubricForm({
                         aria-label={`${c.label} score`}
                         className="ux-input !w-24"
                         type="number"
-                        min={0}
+                        min={minScore}
                         max={max}
                         step={1}
                         required
@@ -179,25 +184,33 @@ export default function RubricForm({
                   <div
                     role="group"
                     aria-label={`${c.label} score`}
-                    className="flex flex-wrap gap-2"
+                    className="score-choices"
                   >
-                    {Array.from({ length: max + 1 }, (_, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        aria-pressed={score === i}
-                        aria-label={`${c.label}: ${i}`}
-                        className={score === i ? "ux-primary" : "ux-secondary"}
-                        onClick={() => setScores({ ...scores, [c.id]: i })}
-                      >
-                        {i}
-                      </button>
+                    {Array.from(
+                      { length: max - minScore + 1 },
+                      (_, i) => i + minScore,
+                    ).map((value) => (
+                      <label key={value} className="score-choice">
+                        <input
+                          type="radio"
+                          name={`score-${c.id}`}
+                          value={value}
+                          checked={score === value}
+                          aria-label={`${c.label}: ${value} out of ${max}`}
+                          onChange={() =>
+                            setScores({ ...scores, [c.id]: value })
+                          }
+                        />
+                        <span>{value}</span>
+                      </label>
                     ))}
                   </div>
                 )}
-                {score === undefined && (
-                  <p className="text-xs text-slate-400">No score selected</p>
-                )}
+                <p className="text-sm text-[var(--ink-3)]" aria-live="polite">
+                  {score === undefined
+                    ? "Choose a score"
+                    : `Selected: ${score} / ${max}`}
+                </p>
               </section>
             );
           })}

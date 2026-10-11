@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EVENT, getEventInitials } from "@/lib/event";
+import { EVENT, getEventInitials, isProductPlus } from "@/lib/event";
 
 export default function EventBrand({
   name,
@@ -13,7 +13,13 @@ export default function EventBrand({
   eventID?: string;
 }) {
   const [failed, setFailed] = useState("");
-  const src = imageUrl || (eventID === "hellohacks" ? "/hh.svg" : "");
+  const src =
+    imageUrl ||
+    (isProductPlus(eventID)
+      ? "/product-plus/mark.png"
+      : eventID === "hellohacks"
+        ? "/hh.svg"
+        : "");
   if (!src || failed === src)
     return (
       <span

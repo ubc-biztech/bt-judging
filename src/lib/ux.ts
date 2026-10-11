@@ -1,8 +1,11 @@
 import type { JudgingAdminSetInput, JudgingSettings } from "@ubc-biztech/sdk";
+import { roundLabel } from "./event";
 
 export const PHASE_LABELS: Record<JudgingSettings["phase"], string> = {
   submission: "Submissions open",
-  prelim: "Preliminary judging",
+  get prelim() {
+    return `${roundLabel("prelim")} judging`;
+  },
   finals: "Finals",
   closed: "Judging closed",
 };
@@ -14,7 +17,9 @@ export const PHASE_HELP: Record<JudgingSettings["phase"], string> = {
 };
 export const PHASE_ACTIONS: Record<JudgingSettings["phase"], string> = {
   submission: "Reopen submissions",
-  prelim: "Start preliminary judging",
+  get prelim() {
+    return `Start ${roundLabel("prelim").toLowerCase()} judging`;
+  },
   finals: "Start finals",
   closed: "Close judging",
 };

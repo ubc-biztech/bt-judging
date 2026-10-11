@@ -13,6 +13,7 @@ import { usePoll } from "@/lib/usePoll";
 import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
 import { errorMessage, eventOrEmpty, listReviews } from "@/lib/bt";
+import { isProductPlus, roundLabel } from "@/lib/event";
 
 export default function TeamFeedbackPage() {
   return (
@@ -141,7 +142,7 @@ function Page() {
             }}
             className="ux-tab"
           >
-            {t === "prelim" ? "Preliminary Round" : "Final Round"}
+            {roundLabel(t)}
           </button>
         ))}
       </div>
@@ -169,18 +170,36 @@ function Page() {
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-[var(--line)] text-xs">
                     <tr>
-                      <th scope="col" className="min-w-28 px-2 py-3">Judge</th>
+                      <th scope="col" className="min-w-28 px-2 py-3">
+                        Judge
+                      </th>
                       {crits.map((c) => (
-                        <th key={c.id} scope="col" className="min-w-28 px-2 py-3">
+                        <th
+                          key={c.id}
+                          scope="col"
+                          className="min-w-28 px-2 py-3"
+                        >
                           {c.label}
                           <span className="mt-1 block font-normal text-[var(--ink-3)]">
-                            Max {criterionMax(c)}{!pointTotals && ` · Weight ${c.weight}`}
+                            Max {criterionMax(c)}
+                            {!pointTotals &&
+                              (isProductPlus()
+                                ? ` · ${((c.weight / crits.reduce((sum, item) => sum + item.weight, 0)) * 100).toFixed(1)}%`
+                                : ` · Weight ${c.weight}`)}
                           </span>
                         </th>
                       ))}
-                      {!pointTotals && <th scope="col" className="min-w-24 p-3">Raw total</th>}
+                      {!pointTotals && (
+                        <th scope="col" className="min-w-24 p-3">
+                          Raw total
+                        </th>
+                      )}
                       <th scope="col" className="min-w-24 p-3">
-                        {pointTotals ? "Score total" : "Weighted total"}
+                        {isProductPlus()
+                          ? "Total / 100"
+                          : pointTotals
+                            ? "Score total"
+                            : "Weighted total"}
                       </th>
                     </tr>
                   </thead>
@@ -192,7 +211,9 @@ function Page() {
                       >
                         <th scope="row" className="p-2 font-medium">
                           <button
-                            ref={selected.id === r.id ? selectedButton : undefined}
+                            ref={
+                              selected.id === r.id ? selectedButton : undefined
+                            }
                             type="button"
                             aria-label={`View feedback from ${r.judgeName || "Judge"}`}
                             aria-pressed={selected.id === r.id}
@@ -202,7 +223,9 @@ function Page() {
                               setSelectedId(r.id);
                               requestAnimationFrame(() => {
                                 detail.current?.focus({ preventScroll: true });
-                                detail.current?.scrollIntoView({ block: "nearest" });
+                                detail.current?.scrollIntoView({
+                                  block: "nearest",
+                                });
                               });
                             }}
                           >
@@ -211,12 +234,20 @@ function Page() {
                         </th>
                         {crits.map((c) => (
                           <td key={c.id} className="p-3 tabular-nums">
-                            {typeof r.scores?.[c.id] === "number" ? r.scores[c.id] : "—"}
+                            {typeof r.scores?.[c.id] === "number"
+                              ? r.scores[c.id]
+                              : "—"}
                           </td>
                         ))}
-                        {!pointTotals && <td className="p-3 tabular-nums">{Number(r.total || 0).toFixed(2)}</td>}
+                        {!pointTotals && (
+                          <td className="p-3 tabular-nums">
+                            {Number(r.total || 0).toFixed(2)}
+                          </td>
+                        )}
                         <td className="p-3 font-semibold tabular-nums">
-                          {Number(pointTotals ? r.total : r.weightedTotal || 0).toFixed(2)}
+                          {Number(
+                            pointTotals ? r.total : r.weightedTotal || 0,
+                          ).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -231,15 +262,21 @@ function Page() {
               tabIndex={-1}
               className="min-w-0 scroll-mt-20 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--blue)]"
             >
-              <h2 id="feedback-heading" className="text-lg font-semibold">Judge feedback</h2>
-              <h3 className="mt-4 font-semibold">{selected.judgeName || "Judge"}</h3>
+              <h2 id="feedback-heading" className="text-lg font-semibold">
+                Judge feedback
+              </h2>
+              <h3 className="mt-4 font-semibold">
+                {selected.judgeName || "Judge"}
+              </h3>
               <p className="mt-1 text-xs text-[var(--ink-3)]">
                 {selected.completedAt
                   ? `Submitted ${new Date(selected.completedAt).toLocaleString()}`
                   : "Submission time unavailable"}
               </p>
               <p className="mt-5 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">
-                {selected.feedback?.trim() ? selected.feedback : "No written feedback."}
+                {selected.feedback?.trim()
+                  ? selected.feedback
+                  : "No written feedback."}
               </p>
               <button
                 type="button"

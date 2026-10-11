@@ -1,60 +1,66 @@
 "use client";
 
-import { useMemo } from "react";
 import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
+import { criterionMax, rubricTotalMax } from "@/lib/judging";
+import { isProductPlus } from "@/lib/event";
+import { PRODUCT_PLUS_PROTOTYPE_GUIDANCE } from "@/lib/product-plus";
+import ScoringGuide from "@/components/ScoringGuide";
 import { usePoll } from "@/lib/usePoll";
 import { errorMessage, eventOrEmpty } from "@/lib/bt";
 
 function Page() {
   const { data: doc, loading, error, refresh } = usePoll(eventOrEmpty, []);
-  const serverRubric = doc?.rubric ?? null;
-  const rubric = useMemo(
-    () => (serverRubric ? normalizeRubric(serverRubric) : null),
-    [serverRubric],
-  );
+  const rubric = doc?.rubric;
 
   const totalMax = rubric ? rubricTotalMax(rubric) : 0;
 
   return (
     <Layout>
       <div className="max-w-5xl space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-[#0b1221]/70 p-5 sm:p-6">
+        <section className="space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-              Judging Rubric
+              {rubric?.name || "Judging rubric"}
             </h1>
-            <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
-              Total / {totalMax}
+            <span className="text-sm text-[var(--ink-3)]">
+              {rubric ? `Total / ${Number(totalMax.toFixed(2))}` : ""}
             </span>
           </div>
 
           <Status error={error ? errorMessage(error) : ""} onRetry={refresh} />
+          {isProductPlus() && (
+            <div className="round-guidance">
+              <p>
+                Score each criterion from 1–10. The same rubric applies to both
+                rounds; judge the evidence presented in this round, without
+                carrying forward an earlier score.
+              </p>
+              <p>{PRODUCT_PLUS_PROTOTYPE_GUIDANCE}</p>
+            </div>
+          )}
           {rubric ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {rubric.criteria.map((criterion) => (
-                <div
-                  key={criterion.id}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-4"
-                >
+            <div className="scorecard-criteria">
+              {rubric.criteria.map((criterion, index) => (
+                <div key={criterion.id} className="scorecard-criterion">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-sm font-semibold text-slate-100">
+                    <h2 className="text-lg font-semibold">
+                      <span className="criterion-number">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
                       {criterion.label}
-                    </div>
-                    <span className="rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-200">
-                      /{criterion.maxScore}
+                    </h2>
+                    <span className="shrink-0 text-sm text-[var(--ink-3)]">
+                      /{criterionMax(criterion, rubric.scaleMax)}
                     </span>
                   </div>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-400">
-                    {criterion.description}
-                  </p>
+                  <ScoringGuide description={criterion.description} />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">
+            <div className="text-sm text-slate-400">
               {loading
                 ? "Loading rubric…"
                 : error
