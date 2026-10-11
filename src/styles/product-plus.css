@@ -156,6 +156,11 @@
     gap: 18px;
   }
 }
+@media (max-width: 639px) {
+  .score-bands {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 480px) {
   .score-choices {
     display: grid;
