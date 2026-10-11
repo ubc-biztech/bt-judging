@@ -11,6 +11,8 @@ import { usePoll } from "@/lib/usePoll";
 import { judging, eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
 import { PHASE_LABELS } from "@/lib/ux";
 import type { JudgingEvent } from "@ubc-biztech/sdk";
+import { isProductPlus, roundLabel } from "@/lib/event";
+import { PRODUCT_PLUS_PROTOTYPE_GUIDANCE } from "@/lib/product-plus";
 
 export default function JudgeScorecard({
   round,
@@ -97,7 +99,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
     }
   }
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-5xl space-y-5">
       <Link href={queue} className="text-sm underline">
         ← Back to {round === "finals" ? "finals" : "assigned teams"}
       </Link>
@@ -113,7 +115,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
         <>
           <header>
             <p className="text-sm text-slate-400">
-              {round === "finals" ? "Finals" : "Preliminary"} scorecard
+              {roundLabel(round)} scorecard
             </p>
             <h1 className="text-3xl font-semibold">
               {doc.settings.anonymizeTeams
@@ -137,6 +139,22 @@ function Page({ round }: { round: "prelim" | "finals" }) {
             team={team}
             showMembers={!doc.settings.anonymizeTeams}
           />
+          {isProductPlus() && (
+            <div className="round-guidance">
+              <p className="font-medium">
+                8-minute presentation · {round === "finals" ? "10" : "5"}-minute
+                Q&A
+              </p>
+              <p>
+                Score each criterion from 1–10. Use the bands below to calibrate
+                your scores; weighting is applied automatically.
+              </p>
+              <details>
+                <summary>How to judge the prototype</summary>
+                <p className="mt-2">{PRODUCT_PLUS_PROTOTYPE_GUIDANCE}</p>
+              </details>
+            </div>
+          )}
           <Status error={error} />
           {doc.rubric?.criteria.length ? (
             <RubricForm
@@ -144,6 +162,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               criteria={doc.rubric.criteria}
               scaleMax={doc.rubric.scaleMax}
               scoreMode={doc.rubric.scoreMode}
+              minScore={isProductPlus() ? 1 : 0}
               defaultScores={poll.data?.existing?.scores}
               defaultFeedback={poll.data?.existing?.feedback}
               submitting={submitting}

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./theme-macos.css";
+@import "./product-plus.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {

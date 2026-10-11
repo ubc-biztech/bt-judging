@@ -5,7 +5,13 @@ import EventBrand from "@/components/EventBrand";
 import { switchEvent, useEvents } from "@/components/EventProvider";
 import { Status, CopyButton } from "@/components/Feedback";
 import { bt, errorMessage } from "@/lib/bt";
-import { EVENT_ID, eventKey } from "@/lib/event";
+import { EVENT_ID, eventKey, isProductPlus, roundLabel } from "@/lib/event";
+import {
+  PRODUCT_PLUS_ID,
+  PRODUCT_PLUS_NAME,
+  PRODUCT_PLUS_RUBRIC,
+  scaleProductRubric,
+} from "@/lib/product-plus";
 import { PHASE_LABELS } from "@/lib/ux";
 
 export default function Events() {
@@ -25,6 +31,7 @@ function Page() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [createdKey, setCreatedKey] = useState("");
   const slug = name
     .toLowerCase()
     .replace(/\b\d{4}\b/g, "")
@@ -42,6 +49,28 @@ function Page() {
     try {
       const eventID = id.trim() || slug;
       await bt.judgingPortal.create({ eventID, year, eventName: name.trim() });
+      const key = eventKey({ eventID, year });
+      // Success reloads into the new event. Keep this key if a later setup step fails.
+      setCreatedKey(key);
+      if (isProductPlus(eventID)) {
+        const scope = bt.judging(eventID, year);
+        const {
+          updatedAt: _updatedAt,
+          me: _me,
+          ...doc
+        } = await scope.admin.get();
+        void _updatedAt;
+        void _me;
+        await scope.admin.set({
+          ...doc,
+          settings: {
+            ...doc.settings,
+            showTeamFeedback: false,
+            allowJudgeSeeOthers: false,
+          },
+          rubric: scaleProductRubric(PRODUCT_PLUS_RUBRIC),
+        });
+      }
       setName("");
       setId("");
       document
@@ -79,6 +108,19 @@ function Page() {
         notice={notice}
         onRetry={catalogError ? refresh : undefined}
       />
+      {createdKey && error && (
+        <p role="status" className="mt-3 text-sm">
+          The event was created, but setup did not finish.{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => switchEvent(createdKey, "/admin/rubric")}
+          >
+            Open its rubric to finish setup
+          </button>
+          .
+        </p>
+      )}
       <div className="mt-6 space-y-3">
         {catalog?.events.map((event) => {
           const key = eventKey(event);
@@ -96,7 +138,9 @@ function Page() {
               <div className="min-w-0 flex-1">
                 <h2 className="font-semibold">{event.eventName}</h2>
                 <p className="text-sm text-slate-400">
-                  {PHASE_LABELS[event.phase]}
+                  {event.phase === "prelim"
+                    ? `${roundLabel("prelim", event.eventID)} judging`
+                    : PHASE_LABELS[event.phase]}
                   {key === defaultKey ? " · Default event" : ""}
                 </p>
               </div>
@@ -143,6 +187,22 @@ function Page() {
         className="mt-8 rounded-xl border border-white/10 p-5"
       >
         <h2 className="text-xl font-semibold">Create event</h2>
+        <p className="mt-2 text-sm text-[var(--ink-3)]">
+          New events have their own teams, judges, and scores. Existing events
+          stay unchanged.
+        </p>
+        <button
+          type="button"
+          className="ux-secondary mt-4"
+          disabled={busy || !!createdKey}
+          onClick={() => {
+            setName(PRODUCT_PLUS_NAME);
+            setId(PRODUCT_PLUS_ID);
+            setYear(2026);
+          }}
+        >
+          Use Product+ 2026 preset
+        </button>
         <fieldset disabled={busy} className="mt-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
             <label className="ux-label">
@@ -153,7 +213,7 @@ function Page() {
                 maxLength={120}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="HelloHacks 2027"
+                placeholder="Product+ 2026"
               />
             </label>
             <label className="ux-label">
@@ -180,7 +240,7 @@ function Page() {
               aria-describedby="event-id-hint"
               value={id || slug}
               onChange={(e) => setId(e.target.value.toLowerCase())}
-              placeholder="hellohacks"
+              placeholder="product-plus"
             />
             <span
               id="event-id-hint"
@@ -189,7 +249,14 @@ function Page() {
               Used in event links. Keep the year in the year field.
             </span>
           </label>
-          <button className="ux-primary" type="submit">
+          {isProductPlus(id || slug) && (
+            <p className="text-sm text-[var(--ink-3)]">
+              Includes Product+ branding, the semifinal/final rubric, /10
+              scoring, and equal weights. Feedback and results stay private
+              until you release them.
+            </p>
+          )}
+          <button className="ux-primary" type="submit" disabled={!!createdKey}>
             {busy ? "Please wait…" : "Create event"}
           </button>
         </fieldset>

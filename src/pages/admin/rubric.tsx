@@ -1,11 +1,24 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { Status } from "@/components/Feedback";
 import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
+import { isProductPlus } from "@/lib/event";
+import {
+  PRODUCT_PLUS_RUBRIC,
+  PRODUCT_PLUS_RUBRIC_SOURCE,
+  scaleProductRubric,
+} from "@/lib/product-plus";
+import { scoringGuide } from "@/lib/scoring-guide";
+import ScoringGuide from "@/components/ScoringGuide";
 import type { Rubric } from "@ubc-biztech/sdk";
-import { loadEvent, setRubric as saveRubric, errorMessage } from "@/lib/bt";
+import {
+  loadEvent,
+  setRubric as saveRubric,
+  listReviews,
+  errorMessage,
+} from "@/lib/bt";
 export default function RubricPage() {
   return (
     <RoleGate allow={["admin"]}>
@@ -21,6 +34,10 @@ function Page() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const product = isProductPlus();
+  const [hasReviews, setHasReviews] = useState(false);
+  const [judgingStarted, setJudgingStarted] = useState(false);
+  const scoringLocked = product && (hasReviews || judgingStarted);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const focusNew = useRef(false);
   useEffect(() => {
@@ -29,20 +46,29 @@ function Page() {
       focusNew.current = false;
     }
   }, [rubric?.criteria.length]);
-  async function load() {
+  const load = useCallback(async () => {
     setError("");
     try {
-      const existing = (await loadEvent())?.rubric;
-      const r = normalizeRubric(existing);
+      const [doc, reviews] = await Promise.all([
+        loadEvent(),
+        product ? listReviews() : Promise.resolve([]),
+      ]);
+      const existing = doc?.rubric;
+      const r =
+        product && !existing
+          ? scaleProductRubric(PRODUCT_PLUS_RUBRIC)
+          : normalizeRubric(existing);
+      setHasReviews(reviews.length > 0);
+      setJudgingStarted(!!doc && doc.settings.phase !== "submission");
       setRubric(r);
       setSaved(existing ? JSON.stringify(r) : "");
     } catch (e) {
       setError(errorMessage(e));
     }
-  }
+  }, [product]);
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
   const dirty = !!rubric && JSON.stringify(rubric) !== saved;
   async function save() {
     if (!rubric || busy) return;
@@ -56,9 +82,22 @@ function Page() {
       setError("Name the rubric and include at least one named criterion.");
       return;
     }
+    if (
+      product &&
+      rubric.criteria.some(
+        (c) => scoringGuide(c.description).bands.length !== 4,
+      )
+    ) {
+      setError(
+        "Include a guide for all four bands on each criterion: 1–3, 4–6, 7–8, and 9–10.",
+      );
+      return;
+    }
     setBusy(true);
     try {
-      const d = await saveRubric(normalizeRubric(rubric));
+      const d = await saveRubric(
+        product ? scaleProductRubric(rubric) : normalizeRubric(rubric),
+      );
       const r = normalizeRubric(d.rubric);
       setRubric(r);
       setSaved(JSON.stringify(r));
@@ -88,9 +127,41 @@ function Page() {
     >
       <h1 className="text-3xl font-semibold">Rubric</h1>
       <p className="text-sm text-[var(--ink-3)]">
-        {rubric.criteria.length} criteria · {rubricTotalMax(rubric)} points
-        total
+        {rubric.criteria.length} criteria ·{" "}
+        {product
+          ? "Each out of 10 · Weighted total out of 100"
+          : `${rubricTotalMax(rubric)} points total`}
       </p>
+      {product && (
+        <div className="round-guidance">
+          <p>
+            The same rubric applies to semifinals and finals. Scores are saved
+            separately for each round.
+          </p>
+          <p>
+            Weights start equal. Increase a relative weight to give that
+            criterion more influence; the total stays out of 100.
+          </p>
+          <p>
+            Scoring bands are an editable interpretation of the{" "}
+            <a
+              className="underline"
+              href={PRODUCT_PLUS_RUBRIC_SOURCE}
+              target="_blank"
+              rel="noreferrer"
+            >
+              source rubric
+            </a>
+            . Review the wording before judging starts.
+          </p>
+          {scoringLocked && (
+            <p role="status">
+              Judging has started or reviews exist. Criteria, weights, and score
+              limits are locked; guidance can still be clarified.
+            </p>
+          )}
+        </div>
+      )}
       <fieldset disabled={busy} className="space-y-5">
         <label className="ux-label">
           Rubric name
@@ -104,7 +175,7 @@ function Page() {
         {rubric.criteria.map((c, i) => (
           <section
             key={c.id}
-            className="rounded-xl border border-white/10 p-4 space-y-3"
+            className="border-t border-[var(--line)] pt-6 space-y-4"
           >
             <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
               <label className="ux-label">
@@ -116,6 +187,7 @@ function Page() {
                     inputs.current[i] = el;
                   }}
                   value={c.label}
+                  disabled={scoringLocked}
                   onChange={(e) => update(i, { label: e.target.value })}
                 />
               </label>
@@ -128,31 +200,61 @@ function Page() {
                   min={1}
                   step={1}
                   value={c.maxScore ?? rubric.scaleMax}
+                  readOnly={product}
                   onChange={(e) =>
                     update(i, { maxScore: Number(e.target.value) })
                   }
                 />
+                {product && (
+                  <span className="text-xs text-[var(--ink-3)]">
+                    Fixed at 10
+                  </span>
+                )}
               </label>
             </div>
             <label className="ux-label">
               Scoring guide
               <textarea
                 className="ux-input"
-                rows={3}
+                rows={product ? 9 : 3}
                 value={c.description ?? ""}
                 onChange={(e) => update(i, { description: e.target.value })}
               />
             </label>
+            {product && (
+              <details>
+                <summary className="text-sm underline">
+                  Preview judge guidance
+                </summary>
+                <div className="mt-4">
+                  <ScoringGuide description={c.description} />
+                </div>
+              </details>
+            )}
             {rubric.scoreMode === "weighted" && (
               <label className="ux-label">
-                Weight
+                Relative weight{" "}
+                {product && (
+                  <span className="text-xs text-[var(--ink-3)]">
+                    {(
+                      (c.weight /
+                        rubric.criteria.reduce(
+                          (n, item) => n + item.weight,
+                          0,
+                        )) *
+                      100
+                    ).toFixed(1)}
+                    % of total
+                  </span>
+                )}
                 <input
                   className="ux-input"
                   type="number"
-                  min={0.1}
-                  step={0.1}
+                  min={0.01}
+                  step="any"
+                  disabled={scoringLocked}
                   required
-                  value={c.weight}
+                  value={Number(c.weight.toPrecision(6))}
                   onChange={(e) =>
                     update(i, { weight: Number(e.target.value) })
                   }
@@ -161,7 +263,8 @@ function Page() {
             )}
             <button
               type="button"
-              className="text-sm text-rose-300"
+              disabled={scoringLocked}
+              className="text-sm text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => {
                 if (confirm(`Remove “${c.label}” from the rubric?`))
                   setRubric({
@@ -177,6 +280,7 @@ function Page() {
         <button
           type="button"
           className="ux-secondary"
+          disabled={scoringLocked}
           onClick={() => {
             focusNew.current = true;
             setRubric({

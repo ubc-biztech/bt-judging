@@ -6,6 +6,7 @@ import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import { eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
 import { PHASE_LABELS, PHASE_HELP } from "@/lib/ux";
+import { isProductPlus, roundLabel } from "@/lib/event";
 export default function JudgeQueue({ round }: { round: "prelim" | "finals" }) {
   return (
     <RoleGate allow={["judge"]}>
@@ -49,7 +50,9 @@ function Page({ round }: { round: "prelim" | "finals" }) {
   return (
     <div className="max-w-4xl space-y-5">
       <h1 className="text-3xl font-semibold">
-        {round === "finals" ? "Finals judging" : "Assigned teams"}
+        {round === "finals" || isProductPlus()
+          ? `${roundLabel(round)} judging`
+          : "Assigned teams"}
       </h1>
       <Status
         loading={!doc && !poll.error}
@@ -74,7 +77,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               <p>
                 You are not assigned as a finals judge.{" "}
                 <Link className="underline" href="/judge">
-                  View preliminary teams
+                  View {roundLabel("prelim").toLowerCase()} teams
                 </Link>
               </p>
             )}

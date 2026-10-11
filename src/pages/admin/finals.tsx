@@ -9,6 +9,7 @@ import { Status } from "@/components/Feedback";
 import type { JudgingEvent, Review } from "@ubc-biztech/sdk";
 import { eventOrEmpty, listReviews, errorMessage, saveEvent } from "@/lib/bt";
 import { PHASE_LABELS, phaseBlocker } from "@/lib/ux";
+import { roundLabel } from "@/lib/event";
 
 export default function FinalsAdminPage() {
   return (
@@ -82,7 +83,7 @@ function Page() {
     if (
       start &&
       !confirm(
-        "Start finals? Preliminary scoring will close and finals judges can begin.",
+        `Start finals? ${roundLabel("prelim")} scoring will close and finals judges can begin.`,
       )
     )
       return;
@@ -239,7 +240,7 @@ function Page() {
               <tr>
                 <th className="p-2">Finalist</th>
                 <th className="p-2">Team</th>
-                <th className="p-2">Prelim average</th>
+                <th className="p-2">{roundLabel("prelim")} average</th>
                 <th className="p-2">Reviews</th>
               </tr>
             </thead>

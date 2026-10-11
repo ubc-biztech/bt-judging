@@ -38,6 +38,17 @@ export function fallbackEventName() {
     : `${EVENT.id.replace(/-/g, " ")} ${EVENT.year}`;
 }
 
+export const isProductPlus = (id = EVENT.id) => id === "product-plus";
+
+// Keep the API's round keys stable. Product+ uses its first round for semifinals.
+export function roundLabel(round: "prelim" | "finals", id = EVENT.id) {
+  return round === "finals"
+    ? "Finals"
+    : isProductPlus(id)
+      ? "Semifinals"
+      : "Preliminary";
+}
+
 export function getEventInitials(name: string) {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")

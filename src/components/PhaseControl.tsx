@@ -70,7 +70,7 @@ export default function PhaseControl({
             className="ux-primary"
             onClick={() => change("prelim")}
           >
-            {busy ? "Starting…" : "Start preliminary judging"}
+            {busy ? "Starting…" : PHASE_ACTIONS.prelim}
           </button>
         )}
         {phase === "prelim" && (

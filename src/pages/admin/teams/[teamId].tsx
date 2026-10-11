@@ -14,6 +14,7 @@ import SubmissionFields, {
 } from "@/components/SubmissionFields";
 import { eventOrEmpty, listReviews, saveEvent, errorMessage } from "@/lib/bt";
 import { submissionError } from "@/lib/ux";
+import { roundLabel } from "@/lib/event";
 export default function AdminTeamDetail() {
   const router = useRouter();
   return (
@@ -232,7 +233,7 @@ function Page({ teamId }: { teamId: string }) {
                   {r.judgeName ||
                     doc.judges.find((j) => j.id === r.judgeId)?.name ||
                     "Judge"}{" "}
-                  · {r.round === "finals" ? "Finals" : "Prelim"} ·{" "}
+                  · {roundLabel(r.round || "prelim")} ·{" "}
                   {r.weightedTotal.toFixed(2)}
                 </summary>
                 <dl className="my-3 text-sm">

@@ -104,9 +104,13 @@ export function normalizeRubric(input?: Partial<Rubric> | null): Rubric {
   };
 }
 
-export function rubricTotalMax(rubric: Pick<Rubric, "criteria" | "scaleMax">) {
+export function rubricTotalMax(
+  rubric: Pick<Rubric, "criteria" | "scaleMax"> & Partial<Pick<Rubric, "scoreMode">>
+) {
   return (rubric.criteria || []).reduce(
-    (sum, criterion) => sum + criterionMax(criterion, rubric.scaleMax),
+    (sum, criterion) =>
+      sum + criterionMax(criterion, rubric.scaleMax) *
+        (rubric.scoreMode === "weighted" ? criterion.weight : 1),
     0
   );
 }

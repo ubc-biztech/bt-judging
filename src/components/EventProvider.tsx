@@ -14,6 +14,7 @@ import {
   eventKey,
   initializeEvent,
   parseEventKey,
+  isProductPlus,
 } from "@/lib/event";
 import { getSession } from "@/lib/session";
 
@@ -92,6 +93,9 @@ export default function EventProvider({ children }: { children: ReactNode }) {
       if (requested && !parseEventKey(requested))
         setError("That event link is invalid. Choose an event below.");
       initializeEvent(key);
+      document.documentElement.dataset.eventTheme = isProductPlus()
+        ? "product-plus"
+        : "default";
       sessionStorage.setItem(TAB_EVENT, key);
       setCatalog(next);
       setReady(true);

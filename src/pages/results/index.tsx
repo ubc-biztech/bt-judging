@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Status } from "@/components/Feedback";
 import { PHASE_LABELS } from "@/lib/ux";
 import Layout from "@/components/Layout";
-import { EVENT_ID } from "@/lib/event";
+import { EVENT_ID, isProductPlus, roundLabel } from "@/lib/event";
 import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
@@ -145,7 +145,11 @@ export default function Results() {
 
   const canShowDetails = isAdmin || allowJudgeSeeOthers;
   const pointTotals = rubricUsesPointTotals(rubric);
-  const primaryMetricLabel = pointTotals ? "Avg Score" : "Avg (Weighted)";
+  const primaryMetricLabel = isProductPlus()
+    ? "Average / 100"
+    : pointTotals
+      ? "Avg Score"
+      : "Avg (Weighted)";
 
   const visibleRows = rows.filter(
     (r) => !hideUnderCovered || r.count >= reqCount,
@@ -310,7 +314,7 @@ export default function Results() {
                   }}
                   className="ux-tab"
                 >
-                  {t === "prelim" ? "Prelim" : "Finals"}
+                  {roundLabel(t)}
                 </button>
               ))}
             </div>
@@ -517,14 +521,21 @@ function Details({
                 <th key={c.id} className="px-3 py-2 text-left">
                   {c.label}
                   <div className="text-[10px] text-gray-500">
-                    {!pointTotals && `Weight ${c.weight} · `}Max{" "}
-                    {criterionMax(c)}
+                    {!pointTotals &&
+                      (isProductPlus()
+                        ? `${((c.weight / crits.reduce((sum, item) => sum + item.weight, 0)) * 100).toFixed(1)}% · `
+                        : `Weight ${c.weight} · `)}
+                    Max {criterionMax(c)}
                   </div>
                 </th>
               ))}
               {!pointTotals && <th className="px-3 py-2 text-left">Raw</th>}
               <th className="px-3 py-2 text-left">
-                {pointTotals ? "Score" : "Weighted"}
+                {isProductPlus()
+                  ? "Total / 100"
+                  : pointTotals
+                    ? "Score"
+                    : "Weighted"}
               </th>
               <th className="px-3 py-2 text-left">Feedback</th>
               <th className="px-3 py-2 text-left">Submitted</th>
