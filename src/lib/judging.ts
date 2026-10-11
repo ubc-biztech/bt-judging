@@ -1,5 +1,24 @@
-import type { Rubric } from "@ubc-biztech/sdk";
+import type { JudgingAdminSetInput, JudgingSettings, Review, Rubric } from "@ubc-biztech/sdk";
 import type { Criterion } from "@/lib/types";
+
+export type JudgingRound = Review["round"];
+export const JUDGING_ROUNDS: JudgingRound[] = ["prelim", "finals"];
+
+export function rubricForRound(
+  doc: Pick<JudgingAdminSetInput, "rubric" | "roundRubrics"> | null | undefined,
+  round: JudgingRound,
+): Rubric | null {
+  return doc?.roundRubrics?.[round] ?? doc?.rubric ?? null;
+}
+
+export function roundScoringLocked(
+  phase: JudgingSettings["phase"],
+  reviews: Pick<Review, "round">[],
+  round: JudgingRound,
+) {
+  return (round === "prelim" ? phase !== "submission" : phase === "finals" || phase === "closed") ||
+    reviews.some((review) => review.round === round);
+}
 
 export const OFFICIAL_JUDGING_RUBRIC: Rubric = {
   name: "HelloHacks 2026 Judging Rubric",

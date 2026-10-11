@@ -23,6 +23,7 @@ import {
 } from "../src/lib/schedule";
 import { presetCodes, presetTeamCodes } from "../src/lib/codes";
 import type { JudgingAdminSetInput } from "@ubc-biztech/sdk";
+import { rubricForRound, roundScoringLocked } from "../src/lib/judging";
 
 const event: JudgingAdminSetInput = {
   settings: {
@@ -58,6 +59,20 @@ const event: JudgingAdminSetInput = {
   teams: [{ id: "t1", name: "Team One", members: [], code: "TEAMONE" }],
 };
 assert.equal(phaseBlocker(event, "prelim"), "");
+assert.equal(rubricForRound(event, "prelim"), event.rubric);
+assert.equal(rubricForRound(event, "finals"), event.rubric);
+const finalsRubric = { ...event.rubric!, name: "Finals", criteria: [{ id: "pitch", label: "Pitch", maxScore: 10, weight: 10 }] };
+const splitEvent = { ...event, roundRubrics: { finals: finalsRubric } };
+assert.equal(rubricForRound(splitEvent, "prelim"), event.rubric);
+assert.equal(rubricForRound(splitEvent, "finals"), finalsRubric);
+assert.equal(phaseBlocker({ ...splitEvent, rubric: null }, "finals"), "");
+assert.match(phaseBlocker({ ...splitEvent, rubric: null }, "prelim"), /rubric/);
+assert.equal(roundScoringLocked("prelim", [], "prelim"), true);
+assert.equal(roundScoringLocked("prelim", [], "finals"), false);
+assert.equal(roundScoringLocked("submission", [{ round: "prelim" }], "prelim"), true);
+assert.equal(roundScoringLocked("submission", [{ round: "prelim" }], "finals"), false);
+assert.equal(roundScoringLocked("finals", [], "finals"), true);
+assert.equal(roundScoringLocked("closed", [], "prelim"), true);
 assert.equal(phaseBlocker(event, "finals"), "");
 assert.match(phaseBlocker({ ...event, rubric: null }, "prelim"), /rubric/);
 assert.match(

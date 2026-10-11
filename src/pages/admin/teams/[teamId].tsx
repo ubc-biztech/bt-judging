@@ -15,6 +15,7 @@ import SubmissionFields, {
 import { eventOrEmpty, listReviews, saveEvent, errorMessage } from "@/lib/bt";
 import { submissionError } from "@/lib/ux";
 import { roundLabel } from "@/lib/event";
+import { rubricForRound } from "@/lib/judging";
 export default function AdminTeamDetail() {
   const router = useRouter();
   return (
@@ -224,7 +225,9 @@ function Page({ teamId }: { teamId: string }) {
             <h2 className="text-xl font-semibold">
               Reviews · {reviews.length}
             </h2>
-            {reviews.map((r) => (
+            {reviews.map((r) => {
+              const rubric = rubricForRound(doc, r.round);
+              return (
               <details
                 key={r.id}
                 className="rounded-xl border border-white/10 p-4"
@@ -237,12 +240,12 @@ function Page({ teamId }: { teamId: string }) {
                   {r.weightedTotal.toFixed(2)}
                 </summary>
                 <dl className="my-3 text-sm">
-                  {doc.rubric?.criteria.map((c) => (
+                  {rubric?.criteria.map((c) => (
                     <div key={c.id} className="flex justify-between gap-3">
                       <dt>{c.label}</dt>
                       <dd>
                         {r.scores[c.id] ?? "—"} /{" "}
-                        {c.maxScore ?? doc.rubric?.scaleMax}
+                        {c.maxScore ?? rubric?.scaleMax}
                       </dd>
                     </div>
                   ))}
@@ -251,7 +254,7 @@ function Page({ teamId }: { teamId: string }) {
                   {r.feedback || "No written feedback."}
                 </p>
               </details>
-            ))}
+            ); })}
             {!reviews.length && (
               <p className="text-sm text-slate-400">No reviews yet.</p>
             )}

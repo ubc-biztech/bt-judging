@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
 import { Status } from "@/components/Feedback";
-import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
-import { isProductPlus } from "@/lib/event";
+import { JUDGING_ROUNDS, type JudgingRound, normalizeRubric, rubricForRound, roundScoringLocked, rubricTotalMax } from "@/lib/judging";
+import { isProductPlus, roundLabel } from "@/lib/event";
 import {
   PRODUCT_PLUS_RUBRIC,
   scaleProductRubric,
@@ -28,15 +28,18 @@ export default function RubricPage() {
   );
 }
 function Page() {
-  const [rubric, setRubric] = useState<Rubric | null>(null);
-  const [saved, setSaved] = useState("");
+  const [round, setRound] = useState<JudgingRound>("prelim");
+  const [drafts, setDrafts] = useState<Partial<Record<JudgingRound, Rubric>>>({});
+  const [saved, setSaved] = useState<Record<JudgingRound, string>>({ prelim: "", finals: "" });
+  const rubric = drafts[round];
+  const setRubric = (r: Rubric) => setDrafts((d) => ({ ...d, [round]: r }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const product = isProductPlus();
-  const [hasReviews, setHasReviews] = useState(false);
-  const [judgingStarted, setJudgingStarted] = useState(false);
-  const scoringLocked = product && (hasReviews || judgingStarted);
+  const [locks, setLocks] = useState<Record<JudgingRound, boolean>>({ prelim: false, finals: false });
+  const [supported, setSupported] = useState(false);
+  const scoringLocked = locks[round];
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const focusNew = useRef(false);
   useEffect(() => {
@@ -50,17 +53,23 @@ function Page() {
     try {
       const [doc, reviews] = await Promise.all([
         loadEvent(),
-        product ? listReviews() : Promise.resolve([]),
+        listReviews(),
       ]);
-      const existing = doc?.rubric;
-      const r =
-        product && !existing
-          ? scaleProductRubric(PRODUCT_PLUS_RUBRIC)
-          : normalizeRubric(existing);
-      setHasReviews(reviews.length > 0);
-      setJudgingStarted(!!doc && doc.settings.phase !== "submission");
-      setRubric(r);
-      setSaved(existing ? JSON.stringify(r) : "");
+      const nextDrafts: Partial<Record<JudgingRound, Rubric>> = {};
+      const nextSaved = { prelim: "", finals: "" };
+      const nextLocks = { prelim: false, finals: false };
+      for (const r of JUDGING_ROUNDS) {
+        const existing = rubricForRound(doc, r);
+        nextDrafts[r] = existing ?? (product
+          ? scaleProductRubric({ ...PRODUCT_PLUS_RUBRIC, name: `Product+ · ${roundLabel(r)}` })
+          : normalizeRubric(null));
+        nextSaved[r] = existing ? JSON.stringify(existing) : "";
+        nextLocks[r] = roundScoringLocked(doc?.settings.phase ?? "submission", reviews, r);
+      }
+      setSupported(doc?.roundRubrics !== undefined);
+      setLocks(nextLocks);
+      setDrafts(nextDrafts);
+      setSaved(nextSaved);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -68,7 +77,8 @@ function Page() {
   useEffect(() => {
     void load();
   }, [load]);
-  const dirty = !!rubric && JSON.stringify(rubric) !== saved;
+  const isDirty = (r: JudgingRound) => !!drafts[r] && JSON.stringify(drafts[r]) !== saved[r];
+  const dirty = isDirty(round);
   async function save() {
     if (!rubric || busy) return;
     setNotice("");
@@ -95,12 +105,13 @@ function Page() {
     setBusy(true);
     try {
       const d = await saveRubric(
-        product ? scaleProductRubric(rubric) : normalizeRubric(rubric),
+        round,
+        product && !scoringLocked ? scaleProductRubric(rubric) : rubric,
       );
-      const r = normalizeRubric(d.rubric);
+      const r = rubricForRound(d, round)!;
       setRubric(r);
-      setSaved(JSON.stringify(r));
-      setNotice("Rubric saved.");
+      setSaved((s) => ({ ...s, [round]: JSON.stringify(r) }));
+      setNotice(`${roundLabel(round)} rubric saved.`);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -117,7 +128,7 @@ function Page() {
     });
   return (
     <form
-      data-unsaved={dirty}
+      data-unsaved={JUDGING_ROUNDS.some(isDirty)}
       onSubmit={(e) => {
         e.preventDefault();
         void save();
@@ -125,6 +136,15 @@ function Page() {
       className="max-w-4xl space-y-5"
     >
       <h1 className="text-3xl font-semibold">Rubric</h1>
+      <div role="group" aria-label="Rubric round" className="flex gap-1 border-b border-[var(--line)] pb-2">
+        {JUDGING_ROUNDS.map((r) => (
+          <button key={r} type="button" className="ux-tab" aria-pressed={round === r} disabled={busy}
+            onClick={() => { setRound(r); setNotice(""); setError(""); }}>
+            {roundLabel(r)}{isDirty(r) && <span aria-label="unsaved changes"> •</span>}
+          </button>
+        ))}
+      </div>
+      {!supported && <Status error="Round rubrics need the backend update before they can be saved." />}
       <p className="text-sm text-[var(--ink-3)]">
         {rubric.criteria.length} criteria ·{" "}
         {product
@@ -136,7 +156,7 @@ function Page() {
           Scoring is locked. Guidance remains editable.
         </p>
       )}
-      <fieldset disabled={busy} className="space-y-5">
+      <fieldset disabled={busy || !supported} className="space-y-5">
         <label className="ux-label">
           Rubric name
           <input
@@ -175,6 +195,7 @@ function Page() {
                   step={1}
                   value={c.maxScore ?? rubric.scaleMax}
                   readOnly={product}
+                  disabled={scoringLocked}
                   onChange={(e) =>
                     update(i, { maxScore: Number(e.target.value) })
                   }
@@ -273,7 +294,7 @@ function Page() {
         </button>
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className="ux-primary" disabled={!dirty}>
-            {busy ? "Saving…" : "Save rubric"}
+            {busy ? "Saving…" : `Save ${roundLabel(round).toLowerCase()} rubric`}
           </button>
           {dirty && (
             <>
@@ -282,7 +303,10 @@ function Page() {
                 type="button"
                 className="ux-secondary"
                 onClick={() => {
-                  if (confirm("Discard changes and reload?")) void load();
+                  if (confirm(`Discard ${roundLabel(round).toLowerCase()} changes?`)) {
+                    if (saved[round]) setRubric(JSON.parse(saved[round]));
+                    else setRubric(product ? scaleProductRubric({ ...PRODUCT_PLUS_RUBRIC, name: `Product+ · ${roundLabel(round)}` }) : normalizeRubric(null));
+                  }
                 }}
               >
                 Discard

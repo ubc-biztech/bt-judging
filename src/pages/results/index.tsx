@@ -9,7 +9,7 @@ import { Status } from "@/components/Feedback";
 import { PHASE_LABELS } from "@/lib/ux";
 import Layout from "@/components/Layout";
 import { EVENT_ID, isProductPlus, roundLabel } from "@/lib/event";
-import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
+import { normalizeRubric, rubricForRound, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
@@ -55,7 +55,7 @@ export default function Results() {
     refresh: refreshDoc,
   } = usePoll(active ? eventOrEmpty : null, [active, session?.role], 10000);
   const settings = doc?.settings ?? null;
-  const rubricRaw = doc?.rubric ?? null;
+  const rubricRaw = rubricForRound(doc, tab);
   const teamList = doc?.teams ?? null;
   const {
     data: reviewList,

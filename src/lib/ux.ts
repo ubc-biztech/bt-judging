@@ -1,5 +1,6 @@
 import type { JudgingAdminSetInput, JudgingSettings } from "@ubc-biztech/sdk";
 import { roundLabel } from "./event";
+import { rubricForRound } from "./judging";
 
 export const PHASE_LABELS: Record<JudgingSettings["phase"], string> = {
   submission: "Submissions open",
@@ -30,9 +31,9 @@ export function setupSteps(doc: JudgingAdminSetInput) {
   );
   return [
     {
-      label: "Save a rubric",
+      label: "Set rubrics",
       href: "/admin/rubric",
-      done: !!doc.rubric?.criteria.length,
+      done: !!rubricForRound(doc, "prelim")?.criteria.length && !!rubricForRound(doc, "finals")?.criteria.length,
     },
     { label: "Add judges", href: "/admin/judges", done: doc.judges.length > 0 },
     { label: "Add teams", href: "/admin/teams", done: doc.teams.length > 0 },
@@ -52,8 +53,8 @@ export function phaseBlocker(
   phase: JudgingSettings["phase"],
 ) {
   if (phase !== "prelim" && phase !== "finals") return "";
-  if (!doc.rubric?.criteria.length)
-    return "Save a rubric before starting judging.";
+  if (!rubricForRound(doc, phase)?.criteria.length)
+    return `Save the ${roundLabel(phase).toLowerCase()} rubric before starting judging.`;
   if (!doc.teams.length || !doc.judges.length)
     return "Add teams and judges before starting judging.";
   if (

@@ -7,7 +7,7 @@ import TableScroll from "@/components/TableScroll";
 import { ForbiddenError } from "@ubc-biztech/sdk";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { normalizeRubric, rubricUsesPointTotals } from "@/lib/judging";
+import { normalizeRubric, rubricForRound, rubricUsesPointTotals } from "@/lib/judging";
 import { useClientSession } from "@/lib/session";
 import { usePoll } from "@/lib/usePoll";
 import type { Review, Rubric, JudgingTeam as Team } from "@ubc-biztech/sdk";
@@ -52,7 +52,7 @@ function Page() {
   const team: Team | null = canViewFeedback
     ? (docPoll.data?.teams.find((t) => t.id === teamId) ?? null)
     : null;
-  const rubricRaw = docPoll.data?.rubric ?? null;
+  const rubricRaw = rubricForRound(docPoll.data, tab);
   const rubric: Rubric | null = useMemo(
     () => (rubricRaw === null ? null : normalizeRubric(rubricRaw)),
     [rubricRaw],
