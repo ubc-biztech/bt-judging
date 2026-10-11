@@ -7,7 +7,6 @@ import { normalizeRubric, rubricTotalMax } from "@/lib/judging";
 import { isProductPlus } from "@/lib/event";
 import {
   PRODUCT_PLUS_RUBRIC,
-  PRODUCT_PLUS_RUBRIC_SOURCE,
   scaleProductRubric,
 } from "@/lib/product-plus";
 import { scoringGuide } from "@/lib/scoring-guide";
@@ -132,35 +131,10 @@ function Page() {
           ? "Each out of 10 · Weighted total out of 100"
           : `${rubricTotalMax(rubric)} points total`}
       </p>
-      {product && (
-        <div className="round-guidance">
-          <p>
-            The same rubric applies to semifinals and finals. Scores are saved
-            separately for each round.
-          </p>
-          <p>
-            Weights start equal. Increase a relative weight to give that
-            criterion more influence; the total stays out of 100.
-          </p>
-          <p>
-            Scoring bands are an editable interpretation of the{" "}
-            <a
-              className="underline"
-              href={PRODUCT_PLUS_RUBRIC_SOURCE}
-              target="_blank"
-              rel="noreferrer"
-            >
-              source rubric
-            </a>
-            . Review the wording before judging starts.
-          </p>
-          {scoringLocked && (
-            <p role="status">
-              Judging has started or reviews exist. Criteria, weights, and score
-              limits are locked; guidance can still be clarified.
-            </p>
-          )}
-        </div>
+      {scoringLocked && (
+        <p role="status" className="text-sm text-[var(--ink-3)]">
+          Scoring is locked. Guidance remains editable.
+        </p>
       )}
       <fieldset disabled={busy} className="space-y-5">
         <label className="ux-label">
@@ -177,7 +151,7 @@ function Page() {
             key={c.id}
             className="border-t border-[var(--line)] pt-6 space-y-4"
           >
-            <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+            <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
               <label className="ux-label">
                 Criterion {i + 1}
                 <input
@@ -205,11 +179,6 @@ function Page() {
                     update(i, { maxScore: Number(e.target.value) })
                   }
                 />
-                {product && (
-                  <span className="text-xs text-[var(--ink-3)]">
-                    Fixed at 10
-                  </span>
-                )}
               </label>
             </div>
             <label className="ux-label">
@@ -232,21 +201,23 @@ function Page() {
               </details>
             )}
             {rubric.scoreMode === "weighted" && (
-              <label className="ux-label">
-                Relative weight{" "}
-                {product && (
-                  <span className="text-xs text-[var(--ink-3)]">
-                    {(
-                      (c.weight /
-                        rubric.criteria.reduce(
-                          (n, item) => n + item.weight,
-                          0,
-                        )) *
-                      100
-                    ).toFixed(1)}
-                    % of total
-                  </span>
-                )}
+              <label className="ux-label sm:max-w-60">
+                <span className="flex flex-wrap items-baseline gap-x-2">
+                  Relative weight
+                  {product && (
+                    <span className="text-xs text-[var(--ink-3)]">
+                      {(
+                        (c.weight /
+                          rubric.criteria.reduce(
+                            (n, item) => n + item.weight,
+                            0,
+                          )) *
+                        100
+                      ).toFixed(1)}
+                      % of total
+                    </span>
+                  )}
+                </span>
                 <input
                   className="ux-input"
                   type="number"
