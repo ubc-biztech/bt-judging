@@ -84,12 +84,12 @@ Look for: Relevant strategy, technical, financial, and marketing concerns; evide
       id: "presentation-communication",
       label: "Presentation & Q&A Communication",
       description: `How clearly does the team present its case and respond to questions?
-Look for: A persuasive eight-minute narrative, readable visuals, clear explanations, and direct, concise Q&A responses.
+Look for: A persuasive narrative, readable visuals, clear explanations, and direct, concise Q&A responses.
 
 1–3: The story is difficult to follow. Unclear visuals or responses obscure the proposal.
 4–6: The main idea is understandable, but structure, pacing, visuals, or answers are inconsistent.
 7–8: A clear, persuasive presentation uses readable visuals and explains decisions well, with direct Q&A responses.
-9–10: A focused narrative makes complex ideas easy to understand within the time limit. Answers are precise, responsive, and candid about uncertainty.`,
+9–10: A focused narrative makes complex ideas easy to understand. Answers are precise, responsive, and candid about uncertainty.`,
       weight: 1,
       maxScore: 10,
     },

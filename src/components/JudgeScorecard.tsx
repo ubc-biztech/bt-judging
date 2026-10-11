@@ -141,10 +141,6 @@ function Page({ round }: { round: "prelim" | "finals" }) {
           />
           {isProductPlus() && (
             <div className="round-guidance">
-              <p className="font-medium">
-                8-minute presentation · {round === "finals" ? "10" : "5"}-minute
-                Q&A
-              </p>
               <p>
                 Score each criterion from 1–10. Use the bands below to calibrate
                 your scores; weighting is applied automatically.

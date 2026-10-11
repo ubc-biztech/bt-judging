@@ -33,10 +33,6 @@ function Page() {
           {isProductPlus() && (
             <div className="round-guidance">
               <p>
-                Semifinals: 8-minute presentation + 5-minute Q&A. Finals:
-                8-minute presentation + 10-minute Q&A.
-              </p>
-              <p>
                 Score each criterion from 1–10. The same rubric applies to both
                 rounds; judge the evidence presented in this round, without
                 carrying forward an earlier score.
