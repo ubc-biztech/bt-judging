@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Status } from "@/components/Feedback";
 import Layout from "@/components/Layout";
 import RoleGate from "@/components/RoleGate";
-import { criterionMax, rubricTotalMax } from "@/lib/judging";
-import { isProductPlus } from "@/lib/event";
+import { JUDGING_ROUNDS, type JudgingRound, criterionMax, rubricForRound, rubricTotalMax } from "@/lib/judging";
+import { isProductPlus, roundLabel } from "@/lib/event";
 import { PRODUCT_PLUS_PROTOTYPE_GUIDANCE } from "@/lib/product-plus";
 import ScoringGuide from "@/components/ScoringGuide";
 import { usePoll } from "@/lib/usePoll";
@@ -12,7 +13,9 @@ import { errorMessage, eventOrEmpty } from "@/lib/bt";
 
 function Page() {
   const { data: doc, loading, error, refresh } = usePoll(eventOrEmpty, []);
-  const rubric = doc?.rubric;
+  const [selectedRound, setRound] = useState<JudgingRound | null>(null);
+  const round = selectedRound ?? (doc?.settings.phase === "finals" || doc?.settings.phase === "closed" ? "finals" : "prelim");
+  const rubric = rubricForRound(doc, round);
 
   const totalMax = rubric ? rubricTotalMax(rubric) : 0;
 
@@ -29,14 +32,15 @@ function Page() {
             </span>
           </div>
 
+          <div role="group" aria-label="Rubric round" className="flex gap-1 border-b border-[var(--line)] pb-2">
+            {JUDGING_ROUNDS.map((r) => (
+              <button key={r} type="button" className="ux-tab" aria-pressed={round === r} onClick={() => setRound(r)}>{roundLabel(r)}</button>
+            ))}
+          </div>
+
           <Status error={error ? errorMessage(error) : ""} onRetry={refresh} />
           {isProductPlus() && (
             <div className="round-guidance">
-              <p>
-                Score each criterion from 1–10. The same rubric applies to both
-                rounds; judge the evidence presented in this round, without
-                carrying forward an earlier score.
-              </p>
               <p>{PRODUCT_PLUS_PROTOTYPE_GUIDANCE}</p>
             </div>
           )}

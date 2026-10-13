@@ -32,8 +32,8 @@ import {
   EVENT,
   EVENT_ID,
   fallbackEventName,
-  isProductPlus,
 } from "./event";
+import { type JudgingRound } from "./judging";
 import { clearSession, getSession, setSession, type Session } from "./session";
 
 export const API_URL =
@@ -310,31 +310,14 @@ export async function saveEvent(
 export const patchSettings = (patch: Partial<JudgingSettings>) =>
   saveEvent((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
 
-export async function setRubric(rubric: Rubric | null) {
-  // Stored review totals are authoritative. Changing scoring after reviews exist
-  // would mix incompatible totals; guidance-only edits do not change those totals.
-  const hasReviews = isProductPlus() && (await listReviews()).length > 0;
+export async function setRubric(round: JudgingRound, rubric: Rubric) {
   return saveEvent((d) => {
-    const scoring = (r: Rubric | null | undefined) =>
-      JSON.stringify({
-        scaleMax: r?.scaleMax,
-        scoreMode: r?.scoreMode,
-        criteria: r?.criteria.map((c) => ({
-          id: c.id,
-          label: c.label,
-          maxScore: c.maxScore,
-          weight: Number(c.weight.toPrecision(12)),
-        })),
-      });
-    if (
-      isProductPlus() &&
-      (hasReviews || d.settings.phase !== "submission") &&
-      scoring(rubric) !== scoring(d.rubric)
-    )
+    if (d.roundRubrics === undefined)
       throw new Error(
-        "Judging has started or reviews exist. Keep the criteria, score limits, and weights unchanged; you can still clarify the scoring guidance.",
+        "Round rubrics need the backend update before they can be saved.",
       );
-    return { ...d, rubric };
+    // Keep the legacy fallback and the other round intact, including on older clients.
+    return { ...d, roundRubrics: { ...d.roundRubrics, [round]: rubric } };
   });
 }
 

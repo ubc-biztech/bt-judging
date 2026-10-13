@@ -12,6 +12,7 @@ import { judging, eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
 import { PHASE_LABELS } from "@/lib/ux";
 import type { JudgingEvent } from "@ubc-biztech/sdk";
 import { isProductPlus, roundLabel } from "@/lib/event";
+import { rubricForRound } from "@/lib/judging";
 import { PRODUCT_PLUS_PROTOTYPE_GUIDANCE } from "@/lib/product-plus";
 
 export default function JudgeScorecard({
@@ -51,6 +52,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
     [teamId, judgeId, round],
   );
   const doc = poll.data?.doc;
+  const rubric = rubricForRound(doc, round);
   const team = doc?.teams.find((t) => t.id === teamId);
   const eligible = (d: JudgingEvent) =>
     round === "finals"
@@ -84,11 +86,11 @@ function Page({ round }: { round: "prelim" | "finals" }) {
         throw new Error(
           "This round or assignment changed. Your draft is still here; return to your queue to check the current round.",
         );
-      if (JSON.stringify(fresh.rubric) !== JSON.stringify(doc.rubric))
+      if (JSON.stringify(rubricForRound(fresh, round)) !== JSON.stringify(rubric))
         throw new Error(
           "The rubric changed. Copy your feedback, then reload and check the new scoring criteria.",
         );
-      await judging().team(teamId).review({ scores, feedback });
+      await judging().team(teamId).review({ round, scores, feedback });
       void poll.refresh();
       return true;
     } catch (e) {
@@ -152,12 +154,12 @@ function Page({ round }: { round: "prelim" | "finals" }) {
             </div>
           )}
           <Status error={error} />
-          {doc.rubric?.criteria.length ? (
+          {rubric?.criteria.length ? (
             <RubricForm
               key={`${round}:${teamId}`}
-              criteria={doc.rubric.criteria}
-              scaleMax={doc.rubric.scaleMax}
-              scoreMode={doc.rubric.scoreMode}
+              criteria={rubric.criteria}
+              scaleMax={rubric.scaleMax}
+              scoreMode={rubric.scoreMode}
               minScore={isProductPlus() ? 1 : 0}
               defaultScores={poll.data?.existing?.scores}
               defaultFeedback={poll.data?.existing?.feedback}
