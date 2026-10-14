@@ -8,6 +8,7 @@ import {
   type ComponentProps,
   type ComponentType,
 } from "react";
+import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import {
@@ -523,6 +524,9 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative min-h-dvh bg-[#050505] text-slate-100">
+      <Head>
+        <title>{`${eventName} Judging`}</title>
+      </Head>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-lg focus:bg-white focus:p-3 focus:text-black"

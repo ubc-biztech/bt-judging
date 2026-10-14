@@ -1,6 +1,7 @@
 import "@/styles/globals.css";
 import "@/lib/amplify";
 import type { AppProps } from "next/app";
+import Head from "next/head";
 import EventProvider from "@/components/EventProvider";
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/router";
@@ -8,11 +9,16 @@ import { EVENT_ID } from "@/lib/event";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <EventProvider>
-      <EventRoute>
-        <Component {...pageProps} />
-      </EventRoute>
-    </EventProvider>
+    <>
+      <Head>
+        <title>BizTech Judging</title>
+      </Head>
+      <EventProvider>
+        <EventRoute>
+          <Component {...pageProps} />
+        </EventRoute>
+      </EventProvider>
+    </>
   );
 }
 
