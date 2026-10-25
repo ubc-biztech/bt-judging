@@ -322,8 +322,7 @@ function Page() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Schedule</h1>
           <p className="mt-1 text-sm text-[var(--ink-3)]">
-            Arrange teams here. Publish when ready for judges and teams to see
-            changes.
+            Publish to share changes with judges and teams.
           </p>
         </div>
         {saved.slots.length > 0 && (
@@ -424,7 +423,7 @@ function Page() {
                       ))}
                       {!judges.length && (
                         <Link className={action} href="/admin/judges">
-                          Add judges first →
+                          Add judges →
                         </Link>
                       )}
                     </div>
@@ -433,7 +432,7 @@ function Page() {
               ))}
               {!s.rooms.length && (
                 <p className="text-sm text-[var(--ink-3)]">
-                  Add a room, then select its judges.
+                  No rooms yet.
                 </p>
               )}
             </div>
@@ -513,8 +512,7 @@ function Page() {
               ))}
               {!s.blocks.length && (
                 <p className="text-sm text-[var(--ink-3)]">
-                  Add your first start time. Schedule remaining teams can add
-                  more blocks.
+                  No time blocks yet.
                 </p>
               )}
             </div>
@@ -550,14 +548,9 @@ function Page() {
           {...dropProps("tray", unschedule)}
           className={`mt-4 rounded-lg border border-dashed border-[var(--line)] p-3 ${dropRing("tray")}`}
         >
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h3 className="text-sm font-semibold">
-              Unscheduled · {free.length}
-            </h3>
-            <span className="text-xs text-[var(--ink-3)]">
-              Unscheduling keeps the team in the event.
-            </span>
-          </div>
+          <h3 className="text-sm font-semibold">
+            Unscheduled · {free.length}
+          </h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {free.map((t) => (
               <div
@@ -593,9 +586,7 @@ function Page() {
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-[var(--ink-3)]">
-            Use the buttons below, or drag teams between slots. Dropping a team
-            on a taken slot double-books it in red while you swap; publishing
-            waits until no slot is red.
+            Drag teams between slots to move them.
           </p>
           {s.blocks.length > 0 && (
             <label className="flex flex-wrap items-center gap-2 text-sm">
@@ -782,9 +773,7 @@ function Page() {
         )}
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
           <div className="text-sm">
-            <span className="font-medium">
-              {dirty ? "Unpublished changes" : "No unpublished changes"}
-            </span>
+            {dirty && <span className="font-medium">Unpublished changes</span>}
             {free.length > 0 && (
               <p className="mt-1 text-[var(--ink-3)]">
                 {free.length} {free.length === 1 ? "team is" : "teams are"}{" "}
@@ -826,7 +815,7 @@ function Page() {
           ))}
           {!saved.changes.length && (
             <li className="text-[var(--ink-3)]">
-              Changes appear here after publishing.
+              No published changes yet.
             </li>
           )}
         </ul>
@@ -921,7 +910,7 @@ function Page() {
                   {!openCells && (
                     <p className="text-sm text-[var(--ink-3)]">
                       {s.rooms.length
-                        ? "Need another slot? Add a time block."
+                        ? "No open slots. Add a time block."
                         : "Add a room before scheduling teams."}
                     </p>
                   )}

@@ -4,34 +4,29 @@ export const normalizeCode = (s: string) => s.replace(/\s+/g, "").toUpperCase();
 export type CodePreset = "first" | "first-initial" | "random";
 export type TeamCodePreset = "name" | "random";
 
-export const CODE_PRESETS: { id: CodePreset; label: string; hint: string }[] = [
+export const CODE_PRESETS: { id: CodePreset; label: string }[] = [
   {
     id: "first",
     label: "First name",
-    hint: "JADE; on a clash JADET, then JADETAO",
   },
   {
     id: "first-initial",
     label: "First name + last initial",
-    hint: "JADET; on a clash JADETAO",
   },
   {
     id: "random",
     label: "Random",
-    hint: "Generated access codes",
   },
 ];
 
 export const TEAM_CODE_PRESETS: {
   id: TeamCodePreset;
   label: string;
-  hint: string;
 }[] = [
-  { id: "name", label: "Team name", hint: "PRODUCTX; on a clash PRODUCTX2" },
+  { id: "name", label: "Team name" },
   {
     id: "random",
     label: "Random",
-    hint: "Generated access codes",
   },
 ];
 

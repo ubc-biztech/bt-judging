@@ -150,7 +150,7 @@ function Page() {
             Assignments
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Uncheck to excuse a judge from a team.{" "}
+            Uncheck to excuse a judge.{" "}
             {excluded
               ? `${excluded} exclusion${excluded === 1 ? "" : "s"}.`
               : ""}

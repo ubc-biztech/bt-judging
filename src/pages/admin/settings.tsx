@@ -151,7 +151,7 @@ function Page() {
                     }}
                   />
                   <span className="text-xs font-normal text-slate-400">
-                    PNG, JPG or WebP, up to 5 MB. Save settings to publish.
+                    PNG, JPG or WebP · Max 5 MB
                   </span>
                 </label>
                 {uploading && (
@@ -203,8 +203,8 @@ function Page() {
                     ],
                     [
                       "showTeamFeedback",
-                      "Release team feedback",
-                      "Teams can see their scores and written feedback.",
+                      "Release scores and feedback to teams",
+                      "",
                     ],
                     [
                       "allowJudgeSeeOthers",

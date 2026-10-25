@@ -200,9 +200,6 @@ function Page() {
             <div className="text-lg font-semibold text-slate-50">
               Create Judge
             </div>
-            <p className="mt-1 text-sm text-slate-400">
-              Add a judge by name. Their access code uses the selected preset.
-            </p>
           </div>
         </div>
         <form
@@ -252,15 +249,15 @@ function Page() {
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div className="mr-auto">
-          <div className="text-sm font-semibold text-slate-50">Presets</div>
-          <p className="mt-0.5 text-xs text-slate-400">
-            {CODE_PRESETS.find((p) => p.id === preset)?.hint}
-          </p>
+          <label htmlFor="judge-code-preset" className="text-sm font-semibold text-slate-50">
+            Code format
+          </label>
         </div>
         <select
+          id="judge-code-preset"
           className="min-h-10 max-w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
           value={preset}
-          aria-label="Judge code preset"
+          aria-label="Judge code format"
           disabled={creating}
           onChange={(e) => setPreset(e.target.value as CodePreset)}
         >
