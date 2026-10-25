@@ -72,7 +72,10 @@ function Page() {
     if (!doc || busy) return;
     setError("");
     setNotice("");
-    if (!teams.length || !judges.length) {
+    if (
+      (start || doc.settings.phase === "finals") &&
+      (!teams.length || !judges.length)
+    ) {
       setError("Select at least one finalist and one finals judge.");
       return;
     }
