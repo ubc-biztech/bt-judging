@@ -58,20 +58,22 @@ function Page() {
         Schedule
       </h1>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-400">
-          {doc?.settings.phase === "finals"
-            ? "Assigned presentation schedule. Finals assignments are in the finals queue."
-            : session?.role === "admin"
-              ? "Published schedule"
-              : "Live schedule · Your slots are highlighted."}
-        </p>
+        {(session?.role !== "judge" || doc?.settings.phase === "finals") && (
+          <p className="text-sm text-slate-400">
+            {doc?.settings.phase === "finals"
+              ? "Assigned presentation schedule. Finals assignments are in the finals queue."
+              : session?.role === "admin"
+                ? "Published schedule"
+                : "Live schedule · Your slots are highlighted."}
+          </p>
+        )}
         <a
           href="/schedule/board"
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.08]"
+          className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
         >
-          Open display ↗
+          Full schedule ↗
         </a>
       </div>
       <Status
@@ -81,7 +83,9 @@ function Page() {
       />
       {doc && !error && session?.role === "judge" && (
         <p className="mt-5 rounded-lg border border-[var(--line)] p-4 text-sm">
-          {myRooms.length ? (
+          {s.blocks.length === 0 || s.rooms.length === 0 ? (
+            "No schedule published yet."
+          ) : myRooms.length ? (
             <>
               Your {myRooms.length === 1 ? "room" : "rooms"}:{" "}
               <strong>{myRooms.map((room) => room.name).join(", ")}</strong>
@@ -106,9 +110,59 @@ function Page() {
           )}
         </p>
       )}
+      {doc && !error && session?.role === "judge" && (
+        <div className="mt-5 sm:hidden">
+          {myRooms.map((room) => (
+            <section key={room.id} aria-label={room.name} className="mb-6">
+              {myRooms.length > 1 && (
+                <h2 className="font-semibold">{room.name}</h2>
+              )}
+              <ol>
+                {s.blocks.map((block) => {
+                  const slots = slotAt(s, block.id, room.id).filter(
+                    (slot) => !isExcluded(s, session.id, slot.teamId),
+                  );
+                  return (
+                    <li
+                      key={block.id}
+                      className="flex items-center gap-4 border-b border-[var(--line)] py-4 text-sm"
+                    >
+                      <span className="w-24 shrink-0 break-words text-[var(--ink-3)]">
+                        {block.label.includes(block.startsAt)
+                          ? block.label
+                          : `${block.startsAt} · ${block.label}`}
+                      </span>
+                      <div className="min-w-0 space-y-3">
+                        {slots.length ? (
+                          slots.map((slot) =>
+                            doc.settings.phase === "prelim" &&
+                            assigned.includes(slot.teamId) ? (
+                              <Link
+                                key={slot.teamId}
+                                className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4"
+                                href={`/judge/${slot.teamId}`}
+                              >
+                                {teamName(slot.teamId)} →
+                              </Link>
+                            ) : (
+                              <p key={slot.teamId}>{teamName(slot.teamId)}</p>
+                            ),
+                          )
+                        ) : (
+                          <span className="text-[var(--ink-3)]">Break</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ))}
+        </div>
+      )}
       <TableScroll
         label="Published schedule"
-        className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-2"
+        className={`mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-2 ${session?.role === "judge" ? "hidden sm:block" : ""}`}
       >
         <table className="min-w-full [&_th]:min-w-40 border-separate border-spacing-0 text-sm">
           <thead>

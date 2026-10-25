@@ -11,7 +11,7 @@ import { usePoll } from "@/lib/usePoll";
 import { judging, eventOrEmpty, listReviews, errorMessage } from "@/lib/bt";
 import { PHASE_LABELS } from "@/lib/ux";
 import type { JudgingEvent } from "@ubc-biztech/sdk";
-import { isProductPlus, roundLabel } from "@/lib/event";
+import { isProductPlus } from "@/lib/event";
 import { rubricForRound } from "@/lib/judging";
 import { PRODUCT_PLUS_PROTOTYPE_GUIDANCE } from "@/lib/product-plus";
 
@@ -86,7 +86,9 @@ function Page({ round }: { round: "prelim" | "finals" }) {
         throw new Error(
           "This round or assignment changed. Your draft is still here; return to your queue to check the current round.",
         );
-      if (JSON.stringify(rubricForRound(fresh, round)) !== JSON.stringify(rubric))
+      if (
+        JSON.stringify(rubricForRound(fresh, round)) !== JSON.stringify(rubric)
+      )
         throw new Error(
           "The rubric changed. Copy your feedback, then reload and check the new scoring criteria.",
         );
@@ -116,9 +118,6 @@ function Page({ round }: { round: "prelim" | "finals" }) {
       {doc && team && (
         <>
           <header>
-            <p className="text-sm text-slate-400">
-              {roundLabel(round)} scorecard
-            </p>
             <h1 className="text-3xl font-semibold">
               {doc.settings.anonymizeTeams
                 ? `Team ${team.id.slice(0, 4).toUpperCase()}`
@@ -137,23 +136,23 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               Your draft is preserved.
             </p>
           )}
-          <ProjectDetails
-            team={team}
-            showMembers={!doc.settings.anonymizeTeams}
-          />
-          {isProductPlus() && (
-            <div className="round-guidance">
-              <p>
-                Score each criterion from 1–10. Use the bands below to calibrate
-                your scores; weighting is applied automatically.
-              </p>
-              <details>
-                <summary>How to judge the prototype</summary>
-                <p className="mt-2">{PRODUCT_PLUS_PROTOTYPE_GUIDANCE}</p>
+          <div>
+            <details className="scorecard-project">
+              <summary>Team & project</summary>
+              <ProjectDetails
+                team={team}
+                showMembers={!doc.settings.anonymizeTeams}
+              />
+            </details>
+            {isProductPlus() && (
+              <details className="scorecard-guidance">
+                <summary>Prototype guidance</summary>
+                <p className="text-sm leading-relaxed text-[var(--ink-2)]">
+                  {PRODUCT_PLUS_PROTOTYPE_GUIDANCE}
+                </p>
               </details>
-            </div>
-          )}
-          <Status error={error} />
+            )}
+          </div>
           {rubric?.criteria.length ? (
             <RubricForm
               key={`${round}:${teamId}`}
@@ -164,6 +163,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
               defaultScores={poll.data?.existing?.scores}
               defaultFeedback={poll.data?.existing?.feedback}
               submitting={submitting}
+              submitError={error}
               readOnly={readOnly}
               onSubmit={submit}
               afterSave={
