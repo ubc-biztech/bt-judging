@@ -248,9 +248,6 @@ function Page() {
       <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div>
           <div className="text-lg font-semibold text-slate-50">Create Team</div>
-          <p className="mt-1 text-sm text-slate-400">
-            Access codes use the selected preset.
-          </p>
         </div>
         <Status error={error} notice={notice} />
         {lastCreated && (
@@ -291,14 +288,14 @@ function Page() {
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
         <div className="mr-auto">
-          <div className="text-sm font-semibold text-slate-50">Presets</div>
-          <p className="mt-0.5 text-xs text-slate-400">
-            {TEAM_CODE_PRESETS.find((p) => p.id === preset)?.hint}
-          </p>
+          <label htmlFor="team-code-preset" className="text-sm font-semibold text-slate-50">
+            Code format
+          </label>
         </div>
         <select
+          id="team-code-preset"
           className="min-h-10 max-w-full rounded-lg border border-white/10 bg-[#0b0b0c] px-3 text-sm text-slate-100"
-          aria-label="Team code preset"
+          aria-label="Team code format"
           value={preset}
           onChange={(e) => setPreset(e.target.value as TeamCodePreset)}
         >

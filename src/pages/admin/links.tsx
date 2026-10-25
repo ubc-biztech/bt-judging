@@ -96,10 +96,10 @@ function Page() {
   return (
     <fieldset disabled={busy} className="max-w-5xl">
       <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
-        Links Manager
+        Links
       </h1>
       <p className="mt-2 text-sm text-slate-400">
-        Shared links appear in the navigation for signed-in participants.
+        Shown in participant navigation.
       </p>
 
       <form
@@ -116,7 +116,7 @@ function Page() {
           value={form.label}
           onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
           className="rounded-lg border border-gray-200 p-2 text-sm dark:border-white/10 dark:bg-transparent"
-          placeholder="Label (Schedule, Discord, …)"
+          placeholder="Link label"
         />
         <input
           aria-label="Link URL"

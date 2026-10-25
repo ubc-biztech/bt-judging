@@ -274,10 +274,10 @@ export default function Results() {
       <Layout>
         <h1 className="text-3xl font-semibold">Results</h1>
         <p className="my-4">
-          The organizers have not shared results with judges yet.
+          Results have not been shared with judges yet.
         </p>
         <Link href="/judge" className="ux-secondary">
-          View your assigned teams
+          Assigned teams
         </Link>
       </Layout>
     );
@@ -293,9 +293,9 @@ export default function Results() {
             <h1 className="text-3xl font-semibold tracking-tight text-slate-50">
               Results
             </h1>
-            {settings?.phase && (
+            {!isAdmin && settings?.phase && (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Event phase: {PHASE_LABELS[settings.phase]}
+                {PHASE_LABELS[settings.phase]}
               </p>
             )}
           </div>

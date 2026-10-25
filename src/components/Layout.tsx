@@ -52,7 +52,6 @@ type Role = Session["role"] | "guest";
 type NavItem = {
   name: string;
   href: string;
-  hint: string;
   icon: ComponentType<ComponentProps<"svg">>;
   match: RegExp;
 };
@@ -70,56 +69,48 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Events",
           href: "/admin/events",
-          hint: "Choose or create an event",
           icon: CalendarDaysIcon,
           match: /^\/admin\/events$/,
         },
         {
           name: "Dashboard",
           href: "/admin",
-          hint: "Overview and quick access",
           icon: HomeIcon,
           match: /^\/admin$/,
         },
         {
           name: "Event Settings",
           href: "/admin/settings",
-          hint: "Submission limits and feedback visibility",
           icon: Cog6ToothIcon,
           match: /^\/admin\/settings$/,
         },
         {
           name: "Judges",
           href: "/admin/judges",
-          hint: "Manage judge profiles",
           icon: UserGroupIcon,
           match: /^\/admin\/judges$/,
         },
         {
           name: "Teams",
           href: "/admin/teams",
-          hint: "Edit team records and links",
           icon: ClipboardDocumentListIcon,
           match: /^\/admin\/teams(?:\/.*)?$/,
         },
         {
           name: "Assignments",
           href: "/admin/assign",
-          hint: "Exceptions: who skips what",
           icon: AdjustmentsHorizontalIcon,
           match: /^\/admin\/assign$/,
         },
         {
           name: "Schedule",
           href: "/admin/schedule",
-          hint: "Rooms, blocks, who presents when",
           icon: CalendarDaysIcon,
           match: /^\/admin\/schedule$/,
         },
         {
           name: "Rubric",
           href: "/admin/rubric",
-          hint: "Criteria and weighting",
           icon: ClipboardDocumentCheckIcon,
           match: /^\/admin\/rubric$/,
         },
@@ -129,23 +120,20 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
       name: "Operations",
       items: [
         {
-          name: "Links Manager",
+          name: "Links",
           href: "/admin/links",
-          hint: "Team demo and repo links",
           icon: LinkIcon,
           match: /^\/admin\/links$/,
         },
         {
           name: "Finals Setup",
           href: "/admin/finals",
-          hint: "Final judge/team workflow",
           icon: TrophyIcon,
           match: /^\/admin\/finals$/,
         },
         {
           name: "Live Results",
           href: "/results",
-          hint: "Leaderboard and detail views",
           icon: ChartBarSquareIcon,
           match: /^\/results$/,
         },
@@ -159,35 +147,30 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Assigned Teams",
           href: "/judge",
-          hint: "Review your assigned teams",
           icon: QueueListIcon,
           match: /^\/judge(?:\/(?!finals(?:\/|$)|rubric(?:\/|$))[^/]+)?$/,
         },
         {
           name: "Schedule",
           href: "/schedule",
-          hint: "Your room, block by block",
           icon: CalendarDaysIcon,
           match: /^\/schedule$/,
         },
         {
           name: "Rubric",
           href: "/judge/rubric",
-          hint: "Scoring reference",
           icon: ClipboardDocumentCheckIcon,
           match: /^\/judge\/rubric$/,
         },
         {
           name: "Finals Queue",
           href: "/judge/finals",
-          hint: "Final round scoring",
           icon: TrophyIcon,
           match: /^\/judge\/finals(?:\/.*)?$/,
         },
         {
           name: "Results",
           href: "/results",
-          hint: "Current leaderboard",
           icon: ChartBarSquareIcon,
           match: /^\/results$/,
         },
@@ -201,21 +184,18 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Submission",
           href: "/submit",
-          hint: "Project links, summary, assets",
           icon: ClipboardDocumentCheckIcon,
           match: /^\/submit(?:\/.*)?$/,
         },
         {
           name: "Schedule",
           href: "/schedule",
-          hint: "When and where you present",
           icon: CalendarDaysIcon,
           match: /^\/schedule$/,
         },
         {
           name: "My Feedback",
           href: "/team/feedback",
-          hint: "Judge notes and scores",
           icon: ClipboardDocumentListIcon,
           match: /^\/team\/feedback$/,
         },
@@ -229,7 +209,6 @@ const NAV_BY_ROLE: Record<Role, NavSection[]> = {
         {
           name: "Sign In",
           href: "/auth",
-          hint: "Admin, judge, or team access",
           icon: ShieldCheckIcon,
           match: /^\/auth$/,
         },
@@ -397,12 +376,11 @@ export default function Layout({ children }: { children: ReactNode }) {
               imageUrl={settings?.imageUrl}
               className="mb-2 h-10 w-auto"
             />
-            <p className="text-base font-semibold tracking-tight text-white">
-              {eventName}
-            </p>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-              Judging Portal
-            </p>
+            {role === "guest" && (
+              <p className="text-base font-semibold tracking-tight text-white">
+                {eventName}
+              </p>
+            )}
           </div>
         </Link>
         {mobile && (
@@ -424,14 +402,16 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
         {sections.map((section) => (
           <div key={section.name}>
-            <p
-              className={[
-                "mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500",
-                mobile ? "pr-3" : "",
-              ].join(" ")}
-            >
-              {section.name}
-            </p>
+            {sections.length > 1 && (
+              <p
+                className={[
+                  "mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500",
+                  mobile ? "pr-3" : "",
+                ].join(" ")}
+              >
+                {section.name}
+              </p>
+            )}
             <ul className={["space-y-1", mobile ? "w-full" : ""].join(" ")}>
               {section.items.map((item) => {
                 const active = item.match.test(path);
@@ -501,10 +481,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           className="size-9 shrink-0 rounded-full"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
-            {session ? "Signed in" : "Guest"}
-          </p>
-          <p className="mt-0.5 truncate text-sm font-medium text-slate-100">
+          <p className="truncate text-sm font-medium text-slate-100">
             {accountLabel}
           </p>
         </div>
@@ -603,9 +580,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             path !== "/admin" &&
             path !== "/admin/events" && (
               <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm">
-                <span>
-                  Current phase: <strong>{PHASE_LABELS[settings.phase]}</strong>
-                </span>
+                <strong>{PHASE_LABELS[settings.phase]}</strong>
                 <Link href="/admin#phase" className="font-semibold underline">
                   Manage phase →
                 </Link>

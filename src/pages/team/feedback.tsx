@@ -100,7 +100,7 @@ function Page() {
     return (
       <div className="max-w-3xl">
         <div className="rounded-2xl border border-gray-200 p-4 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">
-          The organizers have not released feedback yet.
+          Feedback has not been released yet.
         </div>
       </div>
     );
@@ -126,7 +126,7 @@ function Page() {
           <div className="text-sm text-gray-500 dark:text-gray-400">
             {loading
               ? "Loading team…"
-              : "Could not find your team. Double-check your team code or contact organizers."}
+              : "Team not found. Check your code or contact an organizer."}
           </div>
         )}
       </div>
@@ -160,12 +160,9 @@ function Page() {
               aria-labelledby="scores-heading"
               className="min-w-0 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"
             >
-              <h2 id="scores-heading" className="text-lg font-semibold">
+              <h2 id="scores-heading" className="mb-4 text-lg font-semibold">
                 Judges ({sorted.length})
               </h2>
-              <p className="mb-4 mt-1 text-[var(--ink-3)]">
-                Select a judge to read their feedback.
-              </p>
               <TableScroll label="Judge scores">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-[var(--line)] text-xs">
@@ -268,11 +265,11 @@ function Page() {
               <h3 className="mt-4 font-semibold">
                 {selected.judgeName || "Judge"}
               </h3>
-              <p className="mt-1 text-xs text-[var(--ink-3)]">
-                {selected.completedAt
-                  ? `Submitted ${new Date(selected.completedAt).toLocaleString()}`
-                  : "Submission time unavailable"}
-              </p>
+              {selected.completedAt && (
+                <p className="mt-1 text-xs text-[var(--ink-3)]">
+                  Submitted {new Date(selected.completedAt).toLocaleString()}
+                </p>
+              )}
               <p className="mt-5 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">
                 {selected.feedback?.trim()
                   ? selected.feedback

@@ -54,10 +54,7 @@ export default function PhaseControl({
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Event phase
-          </p>
-          <h2 className="mt-1 text-xl font-semibold">{PHASE_LABELS[phase]}</h2>
+          <h2 className="text-xl font-semibold">{PHASE_LABELS[phase]}</h2>
           <p className="mt-1 text-sm text-slate-400">
             {phase === "submission" && doc.settings.lockSubmissions
               ? "Team submissions are locked in Event Settings. Judges cannot score yet."
@@ -116,7 +113,7 @@ export default function PhaseControl({
       </ol>
       <details className="mt-4 text-sm">
         <summary className="cursor-pointer text-slate-400">
-          Other phase controls
+          Change phase
         </summary>
         <div className="mt-3 flex flex-wrap gap-2">
           {Object.keys(PHASE_LABELS)

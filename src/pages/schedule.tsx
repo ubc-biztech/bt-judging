@@ -58,13 +58,9 @@ function Page() {
         Schedule
       </h1>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        {(session?.role !== "judge" || doc?.settings.phase === "finals") && (
+        {doc?.settings.phase === "finals" && (
           <p className="text-sm text-slate-400">
-            {doc?.settings.phase === "finals"
-              ? "Assigned presentation schedule. Finals assignments are in the finals queue."
-              : session?.role === "admin"
-                ? "Published schedule"
-                : "Live schedule · Your slots are highlighted."}
+            Finals assignments are in the finals queue.
           </p>
         )}
         <a

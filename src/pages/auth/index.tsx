@@ -144,10 +144,7 @@ export default function Auth() {
               imageUrl={selectedEvent?.imageUrl}
               className="h-16 w-24"
             />
-            <div>
-              <p className="text-sm text-slate-400">{eventName}</p>
-              <h1 className="mt-1 text-3xl font-semibold">Sign in</h1>
-            </div>
+            <h1 className="text-3xl font-semibold">Sign in</h1>
           </div>
           <div className="w-full sm:w-64">
             <EventPicker disabled={busy} />
@@ -163,9 +160,6 @@ export default function Auth() {
             }}
           >
             <h2 className="text-xl font-semibold">Judges & teams</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Use your code for this event.
-            </p>
             <label className="ux-label mt-6" htmlFor="code">
               Access code
             </label>
@@ -175,7 +169,6 @@ export default function Auth() {
               disabled={busy}
               spellCheck={false}
               className="ux-input"
-              placeholder="Your access code"
               autoCapitalize="characters"
               autoComplete="off"
               value={code}
@@ -199,9 +192,6 @@ export default function Auth() {
             }}
           >
             <h2 className="text-xl font-semibold">Organizers</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Sign in with your BizTech account.
-            </p>
             <label className="ux-label mt-6" htmlFor="email">
               Email
             </label>
@@ -212,7 +202,6 @@ export default function Auth() {
               className="ux-input"
               type="email"
               autoComplete="username"
-              placeholder="you@ubcbiztech.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />

@@ -118,8 +118,8 @@ function Page() {
               role="status"
               className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm"
             >
-              Submissions are closed. Contact an organizer if a correction is
-              needed.{dirty && " Your unsaved draft is preserved."}
+              Submissions are closed. Contact an organizer for corrections.
+              {dirty && " Your unsaved draft is preserved."}
             </p>
           )}
           {closed && !dirty ? (
@@ -159,11 +159,11 @@ function Page() {
           )}
           <div className="flex flex-wrap gap-3">
             <Link href="/schedule" className="ux-secondary">
-              View presentation schedule
+              Schedule
             </Link>
             {settings?.showTeamFeedback && (
               <Link href="/team/feedback" className="ux-secondary">
-                View my feedback
+                Feedback
               </Link>
             )}
           </div>

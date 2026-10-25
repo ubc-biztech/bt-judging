@@ -100,9 +100,6 @@ function Page() {
   return (
     <div className="max-w-4xl" data-unsaved={!!name || !!id}>
       <h1 className="text-3xl font-semibold">Events</h1>
-      <p className="mt-2 text-sm text-slate-400">
-        Choose an event to manage. Past events stay available for feedback.
-      </p>
       <Status
         error={error || catalogError}
         notice={notice}
@@ -177,7 +174,7 @@ function Page() {
         })}
         {catalog && !catalog.events.length && (
           <p className="text-sm text-slate-400">
-            No events yet. Create your first event below.
+            No events yet.
           </p>
         )}
       </div>
@@ -187,10 +184,6 @@ function Page() {
         className="mt-8 rounded-xl border border-white/10 p-5"
       >
         <h2 className="text-xl font-semibold">Create event</h2>
-        <p className="mt-2 text-sm text-[var(--ink-3)]">
-          New events have their own teams, judges, and scores. Existing events
-          stay unchanged.
-        </p>
         <button
           type="button"
           className="ux-secondary mt-4"
@@ -246,14 +239,13 @@ function Page() {
               id="event-id-hint"
               className="text-xs font-normal text-slate-400"
             >
-              Used in event links. Keep the year in the year field.
+              Used in the URL, without the year.
             </span>
           </label>
           {isProductPlus(id || slug) && (
             <p className="text-sm text-[var(--ink-3)]">
-              Includes Product+ branding, the semifinal/final rubric, /10
-              scoring, and equal weights. Feedback and results stay private
-              until you release them.
+              Product+ branding and /10 rubrics with equal weights.
+              Feedback and results start private.
             </p>
           )}
           <button className="ux-primary" type="submit" disabled={!!createdKey}>

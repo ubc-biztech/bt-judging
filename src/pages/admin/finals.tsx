@@ -8,7 +8,7 @@ import RoleGate from "@/components/RoleGate";
 import { Status } from "@/components/Feedback";
 import type { JudgingEvent, Review } from "@ubc-biztech/sdk";
 import { eventOrEmpty, listReviews, errorMessage, saveEvent } from "@/lib/bt";
-import { PHASE_LABELS, phaseBlocker } from "@/lib/ux";
+import { phaseBlocker } from "@/lib/ux";
 import { roundLabel } from "@/lib/event";
 
 export default function FinalsAdminPage() {
@@ -130,12 +130,7 @@ function Page() {
       data-unsaved={dirty}
       className="max-w-5xl space-y-6"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-semibold">Finals setup</h1>
-        <Link href="/admin#phase" className="underline text-sm">
-          {PHASE_LABELS[doc.settings.phase]} →
-        </Link>
-      </div>
+      <h1 className="text-3xl font-semibold">Finals setup</h1>
       <div className="flex flex-wrap items-center gap-3">
         <button
           className="ux-primary"
@@ -231,8 +226,7 @@ function Page() {
           </p>
         )}
         <p className="mb-3 text-sm text-slate-400">
-          Compare review counts before selecting finalists. Teams without
-          reviews are not selected automatically.
+          Teams without reviews are excluded from top-team selection.
         </p>
         <TableScroll label="Finalist comparison">
           <table className="min-w-[32rem] w-full text-left text-sm">

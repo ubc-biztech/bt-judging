@@ -88,9 +88,6 @@ function Page({ round }: { round: "prelim" | "finals" }) {
           {!!teams.length && (
             <p role="status" className="text-sm">
               {done} / {teams.length} reviews saved
-              {done === teams.length && settings.phase === round
-                ? " · All done. You can still edit while this round is open."
-                : ""}
             </p>
           )}
           {settings.phase === round && next && (
