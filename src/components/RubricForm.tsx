@@ -14,6 +14,7 @@ export default function RubricForm({
   scaleMax,
   onSubmit,
   submitting,
+  submitError,
   defaultScores,
   defaultFeedback,
   scoreMode,
@@ -25,6 +26,7 @@ export default function RubricForm({
   scaleMax: number;
   scoreMode?: "points" | "weighted";
   submitting?: boolean;
+  submitError?: string;
   onSubmit: (
     scores: Record<string, number>,
     feedback: string,
@@ -61,6 +63,7 @@ export default function RubricForm({
       scores[c.id] <= criterionMax(c, scaleMax),
   );
   const total = criteria.reduce((n, c) => n + (scores[c.id] ?? 0), 0);
+  const scored = criteria.filter((c) => scores[c.id] !== undefined).length;
   return (
     <form
       data-unsaved={dirty}
@@ -102,18 +105,6 @@ export default function RubricForm({
         }
       }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span>
-          {criteria.filter((c) => scores[c.id] !== undefined).length} /{" "}
-          {criteria.length} criteria scored
-        </span>
-        {points && (
-          <strong>
-            {total} / {rubricTotalMax({ criteria, scaleMax })} points
-          </strong>
-        )}
-        {dirty && <span className="text-amber-300">Unsaved changes</span>}
-      </div>
       <fieldset disabled={readOnly || submitting} className="space-y-5">
         <div className="scorecard-criteria">
           {criteria.map((c, index) => {
@@ -144,7 +135,11 @@ export default function RubricForm({
                         : ` · ×${c.weight}`)}
                   </span>
                 </div>
-                <ScoringGuide description={c.description} score={score} />
+                <ScoringGuide
+                  description={c.description}
+                  score={score}
+                  compact
+                />
                 {max > 10 ? (
                   <div className="space-y-2">
                     <input
@@ -206,7 +201,7 @@ export default function RubricForm({
                     ))}
                   </div>
                 )}
-                <p className="text-sm text-[var(--ink-3)]" aria-live="polite">
+                <p className="sr-only" aria-live="polite">
                   {score === undefined
                     ? "Choose a score"
                     : `Selected: ${score} / ${max}`}
@@ -218,7 +213,7 @@ export default function RubricForm({
         <label className="ux-label">
           Feedback{" "}
           <span className="text-xs text-slate-400">
-            Optional · shared when organizers release feedback
+            Optional · shared after release
           </span>
           <textarea
             className="ux-input resize-y"
@@ -229,35 +224,58 @@ export default function RubricForm({
           />
         </label>
         {!readOnly && (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              className="ux-secondary"
-              onClick={() => {
-                if (
-                  !confirm(
-                    "Clear the scores and feedback in this draft? Your saved review stays unchanged until you save again.",
-                  )
+          <button
+            type="button"
+            className="scorecard-clear"
+            disabled={!dirty || submitting}
+            onClick={() => {
+              if (
+                !confirm(
+                  "Clear the scores and feedback in this draft? Your saved review stays unchanged until you save again.",
                 )
-                  return;
-                setScores({});
-                setFeedback("");
-                setNotice("");
-              }}
+              )
+                return;
+              setScores({});
+              setFeedback("");
+              setNotice("");
+            }}
+          >
+            Clear draft
+          </button>
+        )}
+      </fieldset>
+      <div className="scorecard-actions" data-saved={!dirty && !!notice}>
+        <Status
+          error={submitError || (complete ? "" : error)}
+          notice={!dirty ? notice : ""}
+        />
+        <div className="scorecard-actions-row">
+          <div className="text-sm" aria-live="polite">
+            <p>
+              {scored} / {criteria.length} scored
+            </p>
+            {points && (
+              <p>
+                {total} / {rubricTotalMax({ criteria, scaleMax })} points
+              </p>
+            )}
+            {dirty && <p className="text-xs text-[var(--ink-3)]">Unsaved</p>}
+          </div>
+          {!readOnly && (
+            <button
+              type="submit"
+              className="ux-primary"
+              disabled={submitting || (hasReview && !dirty)}
             >
-              Clear draft
-            </button>
-            <button type="submit" className="ux-primary">
               {submitting
                 ? "Saving…"
                 : hasReview
                   ? "Save review changes"
                   : "Submit review"}
             </button>
-          </div>
-        )}
-      </fieldset>
-      <Status error={complete ? "" : error} notice={!dirty ? notice : ""} />
+          )}
+        </div>
+      </div>
       {!dirty && notice && afterSave}
     </form>
   );

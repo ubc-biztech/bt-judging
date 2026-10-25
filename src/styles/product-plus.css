@@ -51,13 +51,14 @@
 }
 .scorecard-criteria {
   display: grid;
-  gap: 36px;
+  gap: 28px;
 }
 .scorecard-criterion {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 32px;
+  padding-bottom: 24px;
+  scroll-margin-block: 84px 112px;
 }
 .criterion-number {
   margin-right: 12px;
@@ -69,6 +70,54 @@
 .scoring-guide {
   display: grid;
   gap: 20px;
+}
+.scoring-guide-compact {
+  gap: 0;
+}
+.scoring-guide-details > summary,
+.scorecard-project > summary,
+.scorecard-guidance > summary {
+  min-height: 44px;
+  padding-block: 11px;
+  font-size: 14px;
+  color: var(--blue);
+}
+.scoring-guide-details[open] > .scoring-guide {
+  padding-block: 4px 16px;
+}
+.score-band-label {
+  float: right;
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.scorecard-project > section {
+  border: 0;
+  padding: 8px 0;
+}
+.scorecard-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.scorecard-clear {
+  min-height: 44px;
+  color: var(--ink-3);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.scorecard-clear:disabled {
+  opacity: 0.5;
+}
+.judge-team-row {
+  display: block;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.judge-team-row:hover {
+  color: var(--blue);
 }
 .score-bands {
   display: grid;
@@ -98,7 +147,7 @@
   font-size: 12px;
 }
 .score-band dd {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--ink-2);
 }
@@ -159,6 +208,29 @@
 @media (max-width: 639px) {
   .score-bands {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .scorecard-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    margin-inline: -12px;
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+  }
+  .scorecard-actions[data-saved="true"] {
+    position: static;
+  }
+  .scorecard-actions [role="alert"],
+  .scorecard-actions [role="status"] {
+    margin: 0 0 12px;
+  }
+  .scorecard-actions .ux-primary,
+  .judge-queue > .ux-primary {
+    min-height: 48px;
+  }
+  .score-choice span {
+    height: 48px;
   }
 }
 @media (max-width: 480px) {

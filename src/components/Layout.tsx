@@ -578,7 +578,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/[0.04] p-2 text-slate-100 transition hover:bg-white/[0.08]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] p-2 text-slate-100 transition hover:bg-white/[0.08]"
             >
               <span className="sr-only">Open navigation</span>
               <Bars3Icon className="size-5" aria-hidden="true" />

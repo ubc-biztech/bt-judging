@@ -48,7 +48,7 @@ function Page({ round }: { round: "prelim" | "finals" }) {
   const next = teams.find((t) => !reviewed.has(t.id));
   const queue = round === "finals" ? "/judge/finals" : "/judge";
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="judge-queue max-w-4xl space-y-5">
       <h1 className="text-3xl font-semibold">
         {round === "finals" || isProductPlus()
           ? `${roundLabel(round)} judging`
@@ -61,27 +61,30 @@ function Page({ round }: { round: "prelim" | "finals" }) {
       />
       {doc && settings && (
         <>
-          <div className="rounded-xl border border-white/10 p-4 space-y-2">
-            <p className="font-semibold">{PHASE_LABELS[settings.phase]}</p>
-            <p className="text-sm text-slate-400">
-              {PHASE_HELP[settings.phase]}
-            </p>
-            {settings.phase === "finals" &&
-              round === "prelim" &&
-              finalsJudge && (
-                <Link href="/judge/finals" className="ux-primary">
-                  Open finals queue →
-                </Link>
-              )}
-            {round === "finals" && !finalsJudge && (
-              <p>
-                You are not assigned as a finals judge.{" "}
-                <Link className="underline" href="/judge">
-                  View {roundLabel("prelim").toLowerCase()} teams
-                </Link>
+          {(settings.phase !== round ||
+            (round === "finals" && !finalsJudge)) && (
+            <div className="border-l-2 border-[var(--blue)] pl-4 space-y-2">
+              <p className="font-semibold">{PHASE_LABELS[settings.phase]}</p>
+              <p className="text-sm text-slate-400">
+                {PHASE_HELP[settings.phase]}
               </p>
-            )}
-          </div>
+              {settings.phase === "finals" &&
+                round === "prelim" &&
+                finalsJudge && (
+                  <Link href="/judge/finals" className="ux-primary">
+                    Open finals queue →
+                  </Link>
+                )}
+              {round === "finals" && !finalsJudge && (
+                <p>
+                  You are not assigned as a finals judge.{" "}
+                  <Link className="underline" href="/judge">
+                    View {roundLabel("prelim").toLowerCase()} teams
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
           {!!teams.length && (
             <p role="status" className="text-sm">
               {done} / {teams.length} reviews saved
@@ -91,16 +94,19 @@ function Page({ round }: { round: "prelim" | "finals" }) {
             </p>
           )}
           {settings.phase === round && next && (
-            <Link href={`${queue}/${next.id}`} className="ux-primary">
+            <Link
+              href={`${queue}/${next.id}`}
+              className="ux-primary w-full sm:w-auto"
+            >
               {done ? "Continue judging" : "Start judging"} →
             </Link>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div>
             {teams.map((t) => (
               <Link
                 key={t.id}
                 href={`${queue}/${t.id}`}
-                className="rounded-xl border border-white/10 p-4 hover:bg-white/5"
+                className="judge-team-row"
               >
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="font-semibold">
@@ -108,19 +114,14 @@ function Page({ round }: { round: "prelim" | "finals" }) {
                       ? `Team ${t.id.slice(0, 4).toUpperCase()}`
                       : t.name}
                   </h2>
-                  <span className="text-xs text-slate-400">
+                  <span className="shrink-0 text-sm text-[var(--ink-3)]">
                     {reviewed.has(t.id)
                       ? "Review saved"
                       : settings.phase === round
-                        ? "To score"
-                        : "View"}
+                        ? "Score →"
+                        : "View →"}
                   </span>
                 </div>
-                {!settings.anonymizeTeams && !!t.members.length && (
-                  <p className="mt-2 text-sm text-slate-400">
-                    {t.members.join(", ")}
-                  </p>
-                )}
               </Link>
             ))}
           </div>
