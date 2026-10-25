@@ -23,7 +23,31 @@ import {
 } from "../src/lib/schedule";
 import { presetCodes, presetTeamCodes } from "../src/lib/codes";
 import type { JudgingAdminSetInput } from "@ubc-biztech/sdk";
-import { rubricForRound, roundScoringLocked } from "../src/lib/judging";
+import {
+  computeReviewTotals,
+  OFFICIAL_JUDGING_RUBRIC,
+  rubricForRound,
+  rubricTotalMax,
+  roundScoringLocked,
+} from "../src/lib/judging";
+import { PRODUCT_PLUS_RUBRIC, scaleProductRubric } from "../src/lib/product-plus";
+
+const productRubric = scaleProductRubric(PRODUCT_PLUS_RUBRIC);
+const eights = Object.fromEntries(productRubric.criteria.map((c) => [c.id, 8]));
+assert.equal(computeReviewTotals(productRubric, eights).total, 48);
+assert.equal(Number(computeReviewTotals(productRubric, eights).weightedTotal.toFixed(2)), 80);
+assert.equal(Number(rubricTotalMax(productRubric).toFixed(2)), 100);
+const weightedRubric = scaleProductRubric({
+  ...PRODUCT_PLUS_RUBRIC,
+  criteria: PRODUCT_PLUS_RUBRIC.criteria.map((c, i) => ({ ...c, weight: i === 0 ? 5 : 1 })),
+});
+const weightedScores = Object.fromEntries(weightedRubric.criteria.map((c, i) => [c.id, i === 0 ? 10 : 2]));
+assert.equal(computeReviewTotals(weightedRubric, { ...weightedScores, oldCriterion: 100 }).weightedTotal, 60);
+assert.equal(rubricTotalMax(weightedRubric), 100);
+const pointScores = Object.fromEntries(OFFICIAL_JUDGING_RUBRIC.criteria.map((c, i) => [c.id, [17, 21, 24, 7][i]]));
+assert.equal(computeReviewTotals(OFFICIAL_JUDGING_RUBRIC, pointScores).total, 69);
+assert.equal(rubricTotalMax(OFFICIAL_JUDGING_RUBRIC), 100);
+assert.equal(computeReviewTotals(OFFICIAL_JUDGING_RUBRIC, {}).total, 0);
 
 const event: JudgingAdminSetInput = {
   settings: {
@@ -65,6 +89,12 @@ const finalsRubric = { ...event.rubric!, name: "Finals", criteria: [{ id: "pitch
 const splitEvent = { ...event, roundRubrics: { finals: finalsRubric } };
 assert.equal(rubricForRound(splitEvent, "prelim"), event.rubric);
 assert.equal(rubricForRound(splitEvent, "finals"), finalsRubric);
+const scorecardFinals = { ...finalsRubric, scoreMode: "weighted" as const };
+const roundRubrics = { ...event, roundRubrics: { finals: scorecardFinals } };
+assert.equal(computeReviewTotals(rubricForRound(roundRubrics, "finals")!, { pitch: 9 }).weightedTotal, 90);
+assert.equal(rubricTotalMax(rubricForRound(roundRubrics, "finals")!), 100);
+assert.equal(rubricTotalMax(rubricForRound(roundRubrics, "prelim")!), 5);
+console.log("PASS score totals: equal and unequal weights, points, round rubrics, and removed criteria");
 assert.equal(phaseBlocker({ ...splitEvent, rubric: null }, "finals"), "");
 assert.match(phaseBlocker({ ...splitEvent, rubric: null }, "prelim"), /rubric/);
 assert.equal(roundScoringLocked("prelim", [], "prelim"), true);

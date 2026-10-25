@@ -154,20 +154,11 @@ export function computeReviewTotals(
     return sum + Math.max(0, Math.min(max, next));
   }, 0);
 
-  if (rubricUsesPointTotals(rubric)) {
-    return { total, weightedTotal: total };
-  }
-
-  const weightSum = (rubric.criteria || []).reduce(
-    (sum, criterion) => sum + Number(criterion.weight || 1),
-    0
-  );
-
-  const weightedTotal =
-    (rubric.criteria || []).reduce((sum, criterion) => {
-      const next = Number(scores[criterion.id] || 0);
-      return sum + next * Number(criterion.weight || 1);
-    }, 0) / Math.max(1, weightSum);
+  const weightedTotal = (rubric.criteria || []).reduce((sum, criterion) => {
+    const max = criterionMax(criterion, rubric.scaleMax);
+    const next = Number(scores[criterion.id] || 0);
+    return sum + Math.max(0, Math.min(max, next)) * criterion.weight;
+  }, 0);
 
   return { total, weightedTotal };
 }

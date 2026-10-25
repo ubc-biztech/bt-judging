@@ -3,6 +3,7 @@ import type { Criterion } from "@/lib/types";
 import { isProductPlus } from "@/lib/event";
 import {
   criterionMax,
+  computeReviewTotals,
   rubricTotalMax,
   rubricUsesPointTotals,
 } from "@/lib/judging";
@@ -51,19 +52,23 @@ export default function RubricForm({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const dirty = JSON.stringify([scores, feedback]) !== saved;
-  const points = rubricUsesPointTotals({
+  const rubric = {
     criteria,
     scaleMax,
     scoreMode: scoreMode ?? "points",
-  });
-  const complete = criteria.every(
+  };
+  const points = rubricUsesPointTotals(rubric);
+  const scored = criteria.filter(
     (c) =>
       Number.isInteger(scores[c.id]) &&
       scores[c.id] >= minScore &&
       scores[c.id] <= criterionMax(c, scaleMax),
-  );
-  const total = criteria.reduce((n, c) => n + (scores[c.id] ?? 0), 0);
-  const scored = criteria.filter((c) => scores[c.id] !== undefined).length;
+  ).length;
+  const complete = criteria.length > 0 && scored === criteria.length;
+  const totals = computeReviewTotals(rubric, scores);
+  const total = rubric.scoreMode === "weighted" ? totals.weightedTotal : totals.total;
+  const formatScore = (value: number) =>
+    value.toLocaleString("en-CA", { maximumFractionDigits: 2 });
   return (
     <form
       data-unsaved={dirty}
@@ -250,13 +255,18 @@ export default function RubricForm({
           notice={!dirty ? notice : ""}
         />
         <div className="scorecard-actions-row">
-          <div className="text-sm" aria-live="polite">
-            <p>
-              {scored} / {criteria.length} scored
-            </p>
-            {points && (
+          <div className="text-sm" aria-live="polite" aria-atomic="true">
+            {complete ? (
+              <p className="scorecard-total">
+                <span>Total</span>
+                <span className="scorecard-total-value">
+                  <strong>{formatScore(total)}</strong>
+                  <span>/ {formatScore(rubricTotalMax(rubric))}</span>
+                </span>
+              </p>
+            ) : (
               <p>
-                {total} / {rubricTotalMax({ criteria, scaleMax })} points
+                {scored} / {criteria.length} scored
               </p>
             )}
             {dirty && <p className="text-xs text-[var(--ink-3)]">Unsaved</p>}

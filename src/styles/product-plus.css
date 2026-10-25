@@ -95,11 +95,43 @@
   border: 0;
   padding: 8px 0;
 }
+.scorecard-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  padding-block: 16px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+.scorecard-actions[data-saved="true"] {
+  position: static;
+}
 .scorecard-actions-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+.scorecard-total {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-3);
+}
+.scorecard-total-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.scorecard-total-value strong {
+  color: var(--blue);
+  font-size: 48px;
+  font-weight: 600;
+}
+.scorecard-total-value > span {
+  font-size: 20px;
 }
 .scorecard-clear {
   min-height: 44px;
@@ -210,16 +242,14 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .scorecard-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
     margin-inline: -12px;
     padding: 12px 12px max(12px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
-    background: var(--paper);
   }
-  .scorecard-actions[data-saved="true"] {
-    position: static;
+  .scorecard-total-value strong {
+    font-size: 36px;
+  }
+  .scorecard-total-value > span {
+    font-size: 18px;
   }
   .scorecard-actions [role="alert"],
   .scorecard-actions [role="status"] {
